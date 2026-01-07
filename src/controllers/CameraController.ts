@@ -2,6 +2,7 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Ray } from '@babylonjs/core/Culling/ray';
 import { GameConfig } from '../config';
 
 export class CameraController {

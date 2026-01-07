@@ -6,15 +6,20 @@
     "dev": "vite",
     "build": "npm run build:wasm && tsc && vite build",
     "build:wasm": "cd game-physics && wasm-pack build --target web --out-dir ../src/wasm",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
   },
   "dependencies": {
-    "@babylonjs/core": "^7.31.0",
     "@babylonjs/loaders": "^7.31.0",
     "@babylonjs/materials": "^7.31.0"
   },
   "devDependencies": {
+    "@babylonjs/core": "^8.44.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.5",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.7.3",
     "vite": "^6.0.5"
   }

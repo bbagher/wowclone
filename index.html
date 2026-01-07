@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WoW Clone POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+
+        #controls h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        #controls ul {
+            list-style: none;
+        }
+
+        #controls li {
+            margin: 5px 0;
+        }
+
+        .anim-button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: rgba(100, 100, 255, 0.6);
+            border: 1px solid rgba(150, 150, 255, 0.8);
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 11px;
+            text-align: left;
+            transition: background 0.2s;
+        }
+
+        .anim-button:hover {
+            background: rgba(120, 120, 255, 0.8);
+        }
+
+        .anim-button.active {
+            background: rgba(50, 255, 50, 0.6);
+            border-color: rgba(100, 255, 100, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+
+    <div id="ui-overlay">
+        <h2>WoW Clone POC</h2>
+        <div id="stats">
+            FPS: <span id="fps">0</span><br>
+            Position: <span id="position">0, 0, 0</span>
+        </div>
+        <div id="health-bar" style="margin-top: 15px; width: 250px;">
+            <div style="font-size: 12px; margin-bottom: 5px;">
+                Health: <span id="health-text">100/100</span>
+            </div>
+            <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.3); border-radius: 4px; overflow: hidden;">
+                <div id="health-fill" style="width: 100%; height: 100%; background: linear-gradient(to bottom, #00ff00, #00aa00); transition: width 0.3s;"></div>
+            </div>
+        </div>
+        <div id="npc-info" style="margin-top: 15px; font-size: 12px;">
+            NPCs Alive: <span id="npc-count">0</span>
+        </div>
+    </div>
+
+    <div id="controls">
+        <h3>Controls</h3>
+        <ul>
+            <li><strong>WASD</strong> - Move</li>
+            <li><strong>Mouse</strong> - Look around</li>
+            <li><strong>Shift</strong> - Sprint</li>
+            <li><strong>Space</strong> - Jump</li>
+            <li><strong>Click</strong> - Attack nearby NPC</li>
+        </ul>
+    </div>
+
+    <div id="animations" style="position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; color: white; font-size: 12px;">
+        <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px;">Animations</h3>
+        <div id="animation-buttons"></div>
+
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+            <label style="display: block; margin-bottom: 8px;">
+                Vertical Position
+            </label>
+            <input
+                type="range"
+                id="vertical-offset"
+                min="-5"
+                max="5"
+                step="0.1"
+                value="0"
+                style="width: 100%; cursor: pointer;"
+            />
+            <div style="text-align: center; margin-top: 5px; font-size: 11px;">
+                <span id="offset-value">0.0</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main-wasm.ts"></script>
+</body>
+</html>

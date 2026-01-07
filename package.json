@@ -1,0 +1,21 @@
+{
+  "name": "wow-clone-poc",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:wasm && tsc && vite build",
+    "build:wasm": "cd game-physics && wasm-pack build --target web --out-dir ../src/wasm",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.31.0",
+    "@babylonjs/loaders": "^7.31.0",
+    "@babylonjs/materials": "^7.31.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.5"
+  }
+}

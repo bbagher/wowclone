@@ -1,0 +1,28 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_get_vector3_x: (a: number) => number;
+export const __wbg_get_vector3_y: (a: number) => number;
+export const __wbg_get_vector3_z: (a: number) => number;
+export const __wbg_playerphysics_free: (a: number, b: number) => void;
+export const __wbg_set_vector3_x: (a: number, b: number) => void;
+export const __wbg_set_vector3_y: (a: number, b: number) => void;
+export const __wbg_set_vector3_z: (a: number, b: number) => void;
+export const __wbg_vector3_free: (a: number, b: number) => void;
+export const init: () => void;
+export const playerphysics_get_movement_angle: (a: number) => number;
+export const playerphysics_get_position_x: (a: number) => number;
+export const playerphysics_get_position_y: (a: number) => number;
+export const playerphysics_get_position_z: (a: number) => number;
+export const playerphysics_is_moving: (a: number) => number;
+export const playerphysics_new: () => number;
+export const playerphysics_set_position: (a: number, b: number, c: number, d: number) => void;
+export const playerphysics_update: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
+export const vector3_add: (a: number, b: number) => number;
+export const vector3_length: (a: number) => number;
+export const vector3_new: (a: number, b: number, c: number) => number;
+export const vector3_normalize: (a: number) => void;
+export const vector3_scale: (a: number, b: number) => number;
+export const playerphysics_get_rotation: (a: number) => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_start: () => void;

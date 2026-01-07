@@ -2,13 +2,23 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { Ray } from '@babylonjs/core/Culling/ray';
+import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
+import '@babylonjs/core/Culling/ray'; // Side effect import
 import { GameConfig } from '../config';
 
 export class CameraController {
     private camera: ArcRotateCamera;
+    private canvas: HTMLCanvasElement;
+    private scene: Scene;
+    private isRightMouseDown: boolean = false;
+    private isLeftMouseDown: boolean = false;
+    private targetAlpha: number = 0; // Target rotation for realignment
+    private realignSpeed: number = 0.05; // Speed of camera realignment (0-1)
+    private pointerObserver: any = null;
 
     constructor(scene: Scene, canvas: HTMLCanvasElement) {
+        this.canvas = canvas;
+        this.scene = scene;
         this.camera = new ArcRotateCamera(
             'camera',
             -Math.PI / 2,
@@ -18,11 +28,13 @@ export class CameraController {
             scene
         );
 
-        this.setup(canvas);
+        this.targetAlpha = this.camera.alpha;
+        this.setup();
     }
 
-    private setup(canvas: HTMLCanvasElement): void {
-        this.camera.attachControl(canvas, true);
+    private setup(): void {
+        this.camera.attachControl(this.canvas, true);
+
         this.camera.radius = GameConfig.CAMERA_RADIUS;
         this.camera.beta = GameConfig.CAMERA_BETA;
         this.camera.lowerRadiusLimit = GameConfig.CAMERA_MIN_RADIUS;
@@ -35,10 +47,107 @@ export class CameraController {
         this.camera.angularSensibilityX = GameConfig.CAMERA_ANGULAR_SENSITIVITY;
         this.camera.angularSensibilityY = GameConfig.CAMERA_ANGULAR_SENSITIVITY;
         this.camera.inertia = GameConfig.CAMERA_INERTIA;
-        this.camera.panningSensibility = 0; // Disable panning
 
         // WoW-style camera - disable automatic rotation
         this.camera.useAutoRotationBehavior = false;
+
+        // Configure mouse inputs for WoW-style camera
+        // Both left and right mouse buttons can rotate the camera
+        const mouseInput = this.camera.inputs.attached.mouse;
+        if (mouseInput) {
+            // Allow both left (0) and right (2) mouse buttons to rotate camera
+            (mouseInput as any).buttons = [0, 2];
+        }
+
+        // Disable pointer lock to keep cursor visible
+        if (this.canvas.style) {
+            this.canvas.style.cursor = 'default';
+        }
+
+        // Prevent context menu on right-click
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Use Babylon's pointer observable to track mouse button states
+        // This integrates properly with Babylon's input system
+        this.pointerObserver = this.scene.onPointerObservable.add((pointerInfo) => {
+            if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
+                const event = pointerInfo.event as PointerEvent;
+                if (event.button === 2) { // Right mouse
+                    this.isRightMouseDown = true;
+                    console.log('Right mouse DOWN');
+                } else if (event.button === 0) { // Left mouse
+                    this.isLeftMouseDown = true;
+                    console.log('Left mouse DOWN');
+                }
+            } else if (pointerInfo.type === PointerEventTypes.POINTERUP) {
+                const event = pointerInfo.event as PointerEvent;
+                if (event.button === 2) { // Right mouse
+                    this.isRightMouseDown = false;
+                    console.log('Right mouse UP');
+                } else if (event.button === 0) { // Left mouse
+                    this.isLeftMouseDown = false;
+                    console.log('Left mouse UP');
+                }
+            }
+        });
+    }
+
+    public update(isCharacterMoving: boolean = false): void {
+        // While dragging, just track the current camera position
+        // Don't try to realign - let Babylon's camera controls handle it
+        if (this.isRightMouseDown || this.isLeftMouseDown) {
+            // Update target to current position so realignment starts from here when released
+            this.targetAlpha = this.camera.alpha;
+            console.log('DRAGGING - left:', this.isLeftMouseDown, 'right:', this.isRightMouseDown, 'alpha:', this.camera.alpha);
+            return; // Exit early - don't do any realignment while dragging
+        }
+
+        // While character is moving, don't realign camera
+        // The character faces camera.alpha while moving, so realignment would create a feedback loop
+        if (isCharacterMoving) {
+            // Just track current position - don't realign
+            this.targetAlpha = this.camera.alpha;
+            return;
+        }
+
+        // Auto-realign camera behind character when not dragging AND character is idle
+        const target = this.camera.lockedTarget as Mesh;
+        if (target && target.rotation) {
+            // Camera should be behind character's back
+            // Character maintains its facing direction when standing still
+            // When character.rotation.y = 0, character faces +Z (north)
+            // Camera behind character should be at -Z (south), which is alpha = -PI/2
+            // Formula: camera.alpha = character.rotation.y - PI/2
+            this.targetAlpha = this.normalizeAngle(target.rotation.y - Math.PI / 2);
+        }
+
+        // Smoothly interpolate camera to target position
+        const currentAlpha = this.camera.alpha;
+        const diff = this.getShortestAngleDiff(currentAlpha, this.targetAlpha);
+
+        // Lerp towards target
+        if (Math.abs(diff) > 0.01) {
+            console.log('REALIGNING - target:', this.targetAlpha, 'current:', currentAlpha, 'diff:', diff);
+            this.camera.alpha = this.normalizeAngle(currentAlpha + diff * this.realignSpeed);
+        }
+    }
+
+    private normalizeAngle(angle: number): number {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
+
+    private getShortestAngleDiff(from: number, to: number): number {
+        const normFrom = this.normalizeAngle(from);
+        const normTo = this.normalizeAngle(to);
+        let diff = normTo - normFrom;
+
+        // Take shortest path
+        if (diff > Math.PI) diff -= 2 * Math.PI;
+        if (diff < -Math.PI) diff += 2 * Math.PI;
+
+        return diff;
     }
 
     public setTarget(target: Mesh): void {
@@ -65,7 +174,15 @@ export class CameraController {
         return this.camera.alpha;
     }
 
+    public isMouseDragging(): boolean {
+        return this.isRightMouseDown || this.isLeftMouseDown;
+    }
+
     public dispose(): void {
+        if (this.pointerObserver) {
+            this.scene.onPointerObservable.remove(this.pointerObserver);
+            this.pointerObserver = null;
+        }
         this.camera.dispose();
     }
 }

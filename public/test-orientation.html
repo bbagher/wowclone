@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Skeleton Model Orientation Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: monospace; }
+        canvas { width: 100%; height: 600px; border: 1px solid #ccc; }
+        #info { margin-top: 20px; }
+        .controls { margin: 20px 0; }
+        button { margin-right: 10px; padding: 5px 15px; }
+    </style>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+</head>
+<body>
+    <h1>Skeleton Model Orientation Detection</h1>
+    <canvas id="renderCanvas"></canvas>
+
+    <div class="controls">
+        <button onclick="setRotation(0)">Rotation = 0° (Default)</button>
+        <button onclick="setRotation(Math.PI/2)">Rotation = 90°</button>
+        <button onclick="setRotation(Math.PI)">Rotation = 180°</button>
+        <button onclick="setRotation(-Math.PI/2)">Rotation = 270°</button>
+    </div>
+
+    <div class="controls">
+        <button onclick="showDirections()">Show Direction Arrows</button>
+        <button onclick="analyzeGeometry()">Analyze Geometry</button>
+    </div>
+
+    <div id="info">
+        <h3>Instructions:</h3>
+        <p>1. The model will load at rotation.y = 0</p>
+        <p>2. Observe which way the character's FACE/FRONT is pointing</p>
+        <p>3. Blue arrow = +Z (North), Red arrow = +X (East)</p>
+        <p>4. Click "Analyze Geometry" to see bounding box data</p>
+        <p>5. Test at different rotations to confirm</p>
+        <hr>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+
+        let scene, playerMesh, skeletonRoot;
+
+        async function createScene() {
+            scene = new BABYLON.Scene(engine);
+
+            // Camera
+            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 3, 10, BABYLON.Vector3.Zero(), scene);
+            camera.attachControl(canvas, true);
+
+            // Light
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+            // Ground
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
+            ground.material = new BABYLON.StandardMaterial("groundMat", scene);
+            ground.material.diffuseColor = new BABYLON.Color3(0.3, 0.5, 0.3);
+
+            // Coordinate axes
+            showDirections();
+
+            // Load skeleton model
+            try {
+                const result = await BABYLON.SceneLoader.ImportMeshAsync("", "/models/", "Skeleton.glb", scene);
+
+                skeletonRoot = result.meshes[0];
+
+                // Create controller mesh
+                playerMesh = BABYLON.MeshBuilder.CreateBox("controller", { size: 0.1 }, scene);
+                playerMesh.isVisible = false;
+                skeletonRoot.parent = playerMesh;
+
+                // Position skeleton
+                const boundingInfo = skeletonRoot.getHierarchyBoundingVectors();
+                const baseOffset = -boundingInfo.min.y;
+                skeletonRoot.position.y = baseOffset - 1.0;
+
+                log("Model loaded successfully!");
+                log("Click 'Analyze Geometry' button to see orientation data");
+            } catch (error) {
+                log("Error loading model: " + error);
+            }
+
+            return scene;
+        }
+
+        function setRotation(angle) {
+            if (!playerMesh) {
+                log("Model not loaded yet");
+                return;
+            }
+            playerMesh.rotation.y = angle;
+            log("Set rotation.y = " + angle + " (" + (angle * 180 / Math.PI).toFixed(0) + "°)");
+            log("Observe which way the character's FRONT is facing");
+        }
+
+        function showDirections() {
+            // Clear old arrows
+            const oldArrows = scene.meshes.filter(m => m.name.startsWith("arrow"));
+            oldArrows.forEach(m => m.dispose());
+
+            // +Z axis (North) - Blue
+            const arrowZ = BABYLON.MeshBuilder.CreateCylinder("arrowZ", { height: 3, diameter: 0.1 }, scene);
+            arrowZ.position = new BABYLON.Vector3(0, 1.5, 3);
+            arrowZ.material = new BABYLON.StandardMaterial("matZ", scene);
+            arrowZ.material.diffuseColor = new BABYLON.Color3(0, 0, 1);
+
+            // +X axis (East) - Red
+            const arrowX = BABYLON.MeshBuilder.CreateCylinder("arrowX", { height: 3, diameter: 0.1 }, scene);
+            arrowX.position = new BABYLON.Vector3(3, 1.5, 0);
+            arrowX.rotation.z = -Math.PI / 2;
+            arrowX.material = new BABYLON.StandardMaterial("matX", scene);
+            arrowX.material.diffuseColor = new BABYLON.Color3(1, 0, 0);
+
+            // +Y axis (Up) - Green
+            const arrowY = BABYLON.MeshBuilder.CreateCylinder("arrowY", { height: 3, diameter: 0.1 }, scene);
+            arrowY.position = new BABYLON.Vector3(0, 1.5, 0);
+            arrowY.material = new BABYLON.StandardMaterial("matY", scene);
+            arrowY.material.diffuseColor = new BABYLON.Color3(0, 1, 0);
+
+            log("Direction arrows shown:");
+            log("  Red = +X (East)");
+            log("  Green = +Y (Up)");
+            log("  Blue = +Z (North)");
+        }
+
+        function analyzeGeometry() {
+            if (!playerMesh || !skeletonRoot) {
+                log("Model not loaded yet");
+                return;
+            }
+
+            // Reset rotation
+            playerMesh.rotation.y = 0;
+
+            log("\\n=== GEOMETRY ANALYSIS at rotation.y = 0 ===");
+
+            const boundingInfo = skeletonRoot.getHierarchyBoundingVectors();
+            const min = boundingInfo.min;
+            const max = boundingInfo.max;
+            const center = min.add(max).scale(0.5);
+
+            log("Bounding box:");
+            log("  Min: " + formatVec(min));
+            log("  Max: " + formatVec(max));
+            log("  Center: " + formatVec(center));
+            log("  Width (X): " + (max.x - min.x).toFixed(3));
+            log("  Depth (Z): " + (max.z - min.z).toFixed(3));
+            log("  Height (Y): " + (max.y - min.y).toFixed(3));
+
+            log("\\nCentroid offset:");
+            log("  X offset: " + center.x.toFixed(3));
+            log("  Z offset: " + center.z.toFixed(3));
+
+            const absX = Math.abs(center.x);
+            const absZ = Math.abs(center.z);
+
+            let facing, offset;
+            if (absX > absZ) {
+                if (center.x > 0) {
+                    facing = "+X (East) - Red arrow";
+                    offset = -Math.PI / 2;
+                } else {
+                    facing = "-X (West) - opposite Red arrow";
+                    offset = Math.PI / 2;
+                }
+            } else {
+                if (center.z > 0) {
+                    facing = "+Z (North) - Blue arrow";
+                    offset = Math.PI;
+                } else {
+                    facing = "-Z (South) - opposite Blue arrow";
+                    offset = 0;
+                }
+            }
+
+            log("\\n=== INTERPRETATION ===");
+            log("Model's front LIKELY faces: " + facing);
+            log("Recommended camera offset: " + offset + " (" + (offset * 180 / Math.PI).toFixed(0) + "°)");
+            log("\\nVISUAL VERIFICATION:");
+            log("Look at the character model on screen.");
+            log("Which direction is the character's FACE pointing?");
+            log("- Toward Blue arrow (+Z)? Use offset = PI");
+            log("- Toward Red arrow (+X)? Use offset = -PI/2");
+            log("- Away from Blue arrow (-Z)? Use offset = 0");
+            log("- Away from Red arrow (-X)? Use offset = PI/2");
+        }
+
+        function formatVec(v) {
+            return "(" + v.x.toFixed(2) + ", " + v.y.toFixed(2) + ", " + v.z.toFixed(2) + ")";
+        }
+
+        function log(message) {
+            const output = document.getElementById("output");
+            output.innerHTML += message + "<br>";
+            console.log(message);
+        }
+
+        createScene().then(() => {
+            engine.runRenderLoop(() => {
+                scene.render();
+            });
+        });
+
+        window.addEventListener("resize", () => {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>

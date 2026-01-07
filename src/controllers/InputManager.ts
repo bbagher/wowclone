@@ -7,7 +7,6 @@ export class InputManager {
     private canvas: HTMLCanvasElement;
     private scene: Scene;
     private keyboardObserver: any = null;
-    private clickHandler: (() => void) | null = null;
 
     constructor(canvas: HTMLCanvasElement, scene: Scene) {
         this.canvas = canvas;
@@ -29,11 +28,7 @@ export class InputManager {
             }
         });
 
-        // Pointer lock for better mouse control
-        this.clickHandler = () => {
-            this.canvas.requestPointerLock();
-        };
-        this.canvas.addEventListener('click', this.clickHandler);
+        // WoW-style: Mouse cursor is always visible, no pointer lock
     }
 
     public getMovementInput(): MovementInput {
@@ -51,11 +46,6 @@ export class InputManager {
         if (this.keyboardObserver) {
             this.scene.onKeyboardObservable.remove(this.keyboardObserver);
             this.keyboardObserver = null;
-        }
-
-        if (this.clickHandler) {
-            this.canvas.removeEventListener('click', this.clickHandler);
-            this.clickHandler = null;
         }
     }
 }

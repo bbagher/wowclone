@@ -4,7 +4,8 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { Mesh, AbstractMesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { PlayerState, MovementInput } from '../types';
 import { AnimationController } from './AnimationController';
 import { CameraController } from './CameraController';
@@ -142,8 +143,10 @@ export class PlayerController {
         physics.applyVelocity(this.state.mesh.position, velocity);
         physics.checkGroundCollision(this.state);
 
-        // WoW-style: Character always faces away from camera
-        this.state.mesh.rotation.y = cameraController.getAlpha();
+        const isMoving = input.forward || input.backward || input.left || input.right;
+        if (isMoving) {
+            this.state.mesh.rotation.y = cameraController.getAlpha();
+        }
 
         // Update animations
         this.updateAnimations(input);

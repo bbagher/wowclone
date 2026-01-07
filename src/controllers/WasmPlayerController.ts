@@ -4,7 +4,8 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { Mesh, AbstractMesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MovementInput } from '../types';
 import { AnimationController } from './AnimationController';
 import { CameraController } from './CameraController';
@@ -153,10 +154,9 @@ export class WasmPlayerController {
 
         const isMoving = this.physics.is_moving();
 
-        if (isMoving) {
-            // Adjust rotation so the model faces the movement direction
-            this.mesh.rotation.y = this.physics.get_movement_angle() + Math.PI;
-        }
+        // Character maintains its facing direction while moving
+        // Character only rotates when idle and camera realigns, or when camera is actively rotated
+        // Movement does NOT change character rotation
 
         // Update animations
         this.updateAnimations(input.sprint, isMoving);

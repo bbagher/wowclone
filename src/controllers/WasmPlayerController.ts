@@ -260,6 +260,44 @@ export class WasmPlayerController {
         return input.rotateLeft || input.rotateRight;
     }
 
+    /**
+     * Smoothly rotate the character to match the camera's current angle.
+     * This is used during right-click dragging for WoW-style character rotation.
+     * Uses the same formula as Q/E rotation but with smooth interpolation.
+     */
+    public smoothRotateToMatchCamera(cameraAlpha: number, lerpSpeed: number = 0.15): void {
+        if (!this.mesh) return;
+
+        // Calculate target character rotation from camera alpha
+        // Inverse of the camera-to-character formula: character.rotation.y = -camera.alpha - Math.PI / 2
+        const targetRotation = -cameraAlpha - Math.PI / 2;
+
+        // Smoothly interpolate towards target rotation
+        const currentRotation = this.mesh.rotation.y;
+        const diff = this.getShortestAngleDiff(currentRotation, targetRotation);
+
+        // Apply smooth rotation
+        this.mesh.rotation.y = this.normalizeAngle(currentRotation + diff * lerpSpeed);
+    }
+
+    private normalizeAngle(angle: number): number {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
+
+    private getShortestAngleDiff(from: number, to: number): number {
+        const normFrom = this.normalizeAngle(from);
+        const normTo = this.normalizeAngle(to);
+        let diff = normTo - normFrom;
+
+        // Take shortest path
+        if (diff > Math.PI) diff -= 2 * Math.PI;
+        if (diff < -Math.PI) diff += 2 * Math.PI;
+
+        return diff;
+    }
+
     public setSkeletonVerticalOffset(adjustment: number): void {
         if (this.skeletonRoot) {
             this.skeletonRoot.position.y = this.baseOffset - 1.0 + adjustment;

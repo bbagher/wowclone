@@ -12,6 +12,8 @@ export class CameraController {
     private scene: Scene;
     private isRightMouseDown: boolean = false;
     private isLeftMouseDown: boolean = false;
+    private lastPointerX: number = 0; // Track pointer position for right-click drag
+    private lastPointerY: number = 0;
     private targetAlpha: number = 0; // Target rotation for realignment
     private realignSpeed: number = 0.05; // Speed of camera realignment (0-1)
     private pointerObserver: any = null;
@@ -52,11 +54,12 @@ export class CameraController {
         this.camera.useAutoRotationBehavior = false;
 
         // Configure mouse inputs for WoW-style camera
-        // Both left and right mouse buttons can rotate the camera
+        // Only left mouse button rotates the camera (right click will rotate character)
         const mouseInput = this.camera.inputs.attached.mouse;
         if (mouseInput) {
-            // Allow both left (0) and right (2) mouse buttons to rotate camera
-            (mouseInput as any).buttons = [0, 2];
+            // Only allow left (0) mouse button to rotate camera
+            // Right mouse (2) is reserved for character rotation
+            (mouseInput as any).buttons = [0];
         }
 
         // Disable pointer lock to keep cursor visible
@@ -74,6 +77,8 @@ export class CameraController {
                 const event = pointerInfo.event as PointerEvent;
                 if (event.button === 2) { // Right mouse
                     this.isRightMouseDown = true;
+                    this.lastPointerX = event.clientX;
+                    this.lastPointerY = event.clientY;
                     console.log('Right mouse DOWN');
                 } else if (event.button === 0) { // Left mouse
                     this.isLeftMouseDown = true;
@@ -87,6 +92,22 @@ export class CameraController {
                 } else if (event.button === 0) { // Left mouse
                     this.isLeftMouseDown = false;
                     console.log('Left mouse UP');
+                }
+            } else if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
+                const event = pointerInfo.event as PointerEvent;
+
+                // Handle right mouse drag to rotate camera
+                if (this.isRightMouseDown) {
+                    const deltaX = event.clientX - this.lastPointerX;
+                    const deltaY = event.clientY - this.lastPointerY;
+
+                    // Apply rotation using the same sensitivity as left mouse
+                    this.camera.alpha += deltaX / this.camera.angularSensibilityX;
+                    this.camera.beta += deltaY / this.camera.angularSensibilityY;
+
+                    // Update last position
+                    this.lastPointerX = event.clientX;
+                    this.lastPointerY = event.clientY;
                 }
             }
         });
@@ -138,6 +159,14 @@ export class CameraController {
             console.log('REALIGNING - target:', this.targetAlpha, 'current:', currentAlpha, 'diff:', diff);
             this.camera.alpha = this.normalizeAngle(currentAlpha + diff * this.realignSpeed);
         }
+    }
+
+    /**
+     * Returns true if right mouse button is currently being held down.
+     * This is used to trigger continuous character rotation to match camera.
+     */
+    public isRightMouseDragging(): boolean {
+        return this.isRightMouseDown;
     }
 
     /**

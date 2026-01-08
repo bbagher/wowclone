@@ -282,6 +282,12 @@ class Game {
         const input = this.inputManager.getMovementInput();
         this.playerController.update(input, this.cameraController);
 
+        // WoW-style: Continuously rotate character to match camera while right-clicking
+        if (this.cameraController.isRightMouseDragging()) {
+            const cameraAlpha = this.cameraController.getAlpha();
+            this.playerController.smoothRotateToMatchCamera(cameraAlpha);
+        }
+
         // Check if character is moving or rotating
         const isMoving = input.forward || input.backward || input.left || input.right;
         const isRotating = input.rotateLeft || input.rotateRight;

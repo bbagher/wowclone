@@ -1,29 +1,60 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Skeleton Model Orientation Test</title>
     <style>
-        body { margin: 0; padding: 20px; font-family: monospace; }
-        canvas { width: 100%; height: 600px; border: 1px solid #ccc; }
-        #info { margin-top: 20px; }
-        .controls { margin: 20px 0; }
-        button { margin-right: 10px; padding: 5px 15px; }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+        }
+
+        canvas {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+        }
+
+        #info {
+            margin-top: 20px;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        button {
+            margin-right: 10px;
+            padding: 5px 15px;
+        }
     </style>
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
+
 <body>
     <h1>Skeleton Model Orientation Detection</h1>
     <canvas id="renderCanvas"></canvas>
 
     <div class="controls">
-        <button onclick="setRotation(0)">Rotation = 0° (Default)</button>
-        <button onclick="setRotation(Math.PI/2)">Rotation = 90°</button>
-        <button onclick="setRotation(Math.PI)">Rotation = 180°</button>
-        <button onclick="setRotation(-Math.PI/2)">Rotation = 270°</button>
+        <strong>Character Rotation:</strong>
+        <button onclick="setRotation(0)">0°</button>
+        <button onclick="setRotation(Math.PI/2)">90°</button>
+        <button onclick="setRotation(Math.PI)">180°</button>
+        <button onclick="setRotation(-Math.PI/2)">270°</button>
     </div>
 
     <div class="controls">
+        <strong>Camera Rotation:</strong>
+        <button onclick="setCameraRotation(0)">0°</button>
+        <button onclick="setCameraRotation(Math.PI/2)">90°</button>
+        <button onclick="setCameraRotation(Math.PI)">180°</button>
+        <button onclick="setCameraRotation(-Math.PI/2)">270°</button>
+    </div>
+
+    <div class="controls">
+        <button onclick="toggleCameraLock()">Toggle Camera Lock (Currently: <span id="lockStatus">OFF</span>)</button>
         <button onclick="showDirections()">Show Direction Arrows</button>
         <button onclick="analyzeGeometry()">Analyze Geometry</button>
     </div>
@@ -43,13 +74,15 @@
         const canvas = document.getElementById("renderCanvas");
         const engine = new BABYLON.Engine(canvas, true);
 
-        let scene, playerMesh, skeletonRoot;
+        let scene, playerMesh, skeletonRoot, camera;
+        let cameraLocked = false;
+        let lockedAlphaOffset = -Math.PI / 2; // Relative offset from player rotation
 
         async function createScene() {
             scene = new BABYLON.Scene(engine);
 
             // Camera
-            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 3, 10, BABYLON.Vector3.Zero(), scene);
+            camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 3, 10, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
 
             // Light
@@ -59,6 +92,19 @@
             const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
             ground.material = new BABYLON.StandardMaterial("groundMat", scene);
             ground.material.diffuseColor = new BABYLON.Color3(0.3, 0.5, 0.3);
+
+            // Add reference tree
+            const treeTrunk = BABYLON.MeshBuilder.CreateCylinder("treeTrunk", { height: 2, diameter: 0.3 }, scene);
+            treeTrunk.position = new BABYLON.Vector3(5, 1, 5);
+            const trunkMat = new BABYLON.StandardMaterial("trunkMat", scene);
+            trunkMat.diffuseColor = new BABYLON.Color3(0.4, 0.2, 0.1);
+            treeTrunk.material = trunkMat;
+
+            const treeTop = BABYLON.MeshBuilder.CreateSphere("treeTop", { diameter: 2 }, scene);
+            treeTop.position = new BABYLON.Vector3(5, 3, 5);
+            const topMat = new BABYLON.StandardMaterial("topMat", scene);
+            topMat.diffuseColor = new BABYLON.Color3(0.1, 0.6, 0.1);
+            treeTop.material = topMat;
 
             // Coordinate axes
             showDirections();
@@ -94,8 +140,20 @@
                 return;
             }
             playerMesh.rotation.y = angle;
-            log("Set rotation.y = " + angle + " (" + (angle * 180 / Math.PI).toFixed(0) + "°)");
-            log("Observe which way the character's FRONT is facing");
+            log("Set character rotation.y = " + angle + " (" + (angle * 180 / Math.PI).toFixed(0) + "°)");
+        }
+
+        function setCameraRotation(angle) {
+            if (!camera) {
+                log("Camera not ready yet");
+                return;
+            }
+            if (cameraLocked) {
+                log("Camera is locked! Unlock it first to manually rotate.");
+                return;
+            }
+            camera.alpha = angle + Math.PI / 2;
+            log("Set camera.alpha = " + (angle + Math.PI / 2) + " (" + ((angle + Math.PI / 2) * 180 / Math.PI).toFixed(0) + "°)");
         }
 
         function showDirections() {
@@ -103,29 +161,38 @@
             const oldArrows = scene.meshes.filter(m => m.name.startsWith("arrow"));
             oldArrows.forEach(m => m.dispose());
 
-            // +Z axis (North) - Blue
+            if (!playerMesh) {
+                log("Model not loaded yet");
+                return;
+            }
+
+            // +Z axis (Forward) - Blue
             const arrowZ = BABYLON.MeshBuilder.CreateCylinder("arrowZ", { height: 3, diameter: 0.1 }, scene);
             arrowZ.position = new BABYLON.Vector3(0, 1.5, 3);
+            arrowZ.rotation.x = Math.PI / 2; // Rotate to point along +Z
             arrowZ.material = new BABYLON.StandardMaterial("matZ", scene);
             arrowZ.material.diffuseColor = new BABYLON.Color3(0, 0, 1);
+            arrowZ.parent = playerMesh; // Attach to player so it rotates with character
 
-            // +X axis (East) - Red
+            // +X axis (Right) - Red
             const arrowX = BABYLON.MeshBuilder.CreateCylinder("arrowX", { height: 3, diameter: 0.1 }, scene);
             arrowX.position = new BABYLON.Vector3(3, 1.5, 0);
             arrowX.rotation.z = -Math.PI / 2;
             arrowX.material = new BABYLON.StandardMaterial("matX", scene);
             arrowX.material.diffuseColor = new BABYLON.Color3(1, 0, 0);
+            arrowX.parent = playerMesh; // Attach to player so it rotates with character
 
             // +Y axis (Up) - Green
             const arrowY = BABYLON.MeshBuilder.CreateCylinder("arrowY", { height: 3, diameter: 0.1 }, scene);
             arrowY.position = new BABYLON.Vector3(0, 1.5, 0);
             arrowY.material = new BABYLON.StandardMaterial("matY", scene);
             arrowY.material.diffuseColor = new BABYLON.Color3(0, 1, 0);
+            arrowY.parent = playerMesh; // Attach to player so it rotates with character
 
-            log("Direction arrows shown:");
-            log("  Red = +X (East)");
+            log("Direction arrows shown (attached to character):");
+            log("  Red = +X (Right)");
             log("  Green = +Y (Up)");
-            log("  Blue = +Z (North)");
+            log("  Blue = +Z (Forward)");
         }
 
         function analyzeGeometry() {
@@ -200,8 +267,37 @@
             console.log(message);
         }
 
+        function toggleCameraLock() {
+            cameraLocked = !cameraLocked;
+            document.getElementById("lockStatus").textContent = cameraLocked ? "ON" : "OFF";
+
+            if (cameraLocked) {
+                camera.detachControl();
+                // Capture current camera offset relative to player rotation
+                if (playerMesh) {
+                    lockedAlphaOffset = camera.alpha - playerMesh.rotation.y;
+                    log("Camera locked to model's back");
+                    log("Current camera.alpha: " + camera.alpha.toFixed(3));
+                    log("Current player.rotation.y: " + playerMesh.rotation.y.toFixed(3));
+                    log("Calculated lockedAlphaOffset: " + lockedAlphaOffset.toFixed(3));
+                }
+            } else {
+                camera.attachControl(canvas, true);
+                log("Camera unlocked - free to move");
+            }
+        }
+
+        function updateCamera() {
+            if (!cameraLocked || !playerMesh) return;
+
+            // Camera lock formula: camera stays behind character's back
+            // Formula: camera.alpha = -character.rotation.y - Math.PI / 2
+            camera.alpha = -playerMesh.rotation.y - Math.PI / 2;
+        }
+
         createScene().then(() => {
             engine.runRenderLoop(() => {
+                updateCamera();
                 scene.render();
             });
         });
@@ -211,4 +307,5 @@
         });
     </script>
 </body>
+
 </html>

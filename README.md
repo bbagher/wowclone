@@ -143,6 +143,27 @@ this.mesh.position.z = this.physics.get_position_z();
 - Mouse drag rotates camera around player
 - Auto-realignment when not moving (optional)
 
+**Camera-to-Character Lock Formula:**
+
+For the camera to remain locked behind the character's back at all times, the relationship between the character's rotation and camera alpha is:
+
+```typescript
+camera.alpha = -character.rotation.y - Math.PI / 2
+// Or equivalently:
+camera.alpha = -character.rotation.y + (3 * Math.PI / 2)
+```
+
+This ensures the camera stays positioned behind the character regardless of which direction the character is facing:
+
+| Character Rotation | Camera Alpha | Camera Position |
+|-------------------|--------------|-----------------|
+| 0° (0 rad)        | 270° (3π/2)  | Behind character |
+| 90° (π/2)         | 180° (π)     | Behind character |
+| 180° (π)          | 90° (π/2)    | Behind character |
+| 270° (-π/2)       | 0° (0)       | Behind character |
+
+The negative sign inverts the rotation direction, and the -π/2 offset accounts for Babylon.js's coordinate system where the camera's initial alpha position needs to be adjusted.
+
 #### InputManager ([src/controllers/InputManager.ts](src/controllers/InputManager.ts))
 
 **Purpose:** Centralized input handling with proper cleanup.

@@ -25,11 +25,9 @@ This codebase follows a **modular controller pattern** where each system is isol
 │   │
 │   ├── controllers/                    # Modular game systems
 │   │   ├── WasmPlayerController.ts     # Player movement & WASM physics integration
-│   │   ├── PlayerController.ts         # Alternative JS-only player controller
 │   │   ├── CameraController.ts         # WoW-style third-person camera
 │   │   ├── InputManager.ts             # Keyboard/mouse input handling
 │   │   ├── AnimationController.ts      # Animation state machine
-│   │   ├── PhysicsSystem.ts            # JavaScript physics (fallback)
 │   │   ├── EnvironmentManager.ts       # Terrain & nature assets
 │   │   ├── NPCManager.ts               # NPC spawning & management
 │   │   └── CombatSystem.ts             # Health & damage system
@@ -252,18 +250,6 @@ this.mesh.position.z = this.physics.get_position_z();
 - `getHealthPercent()`: Returns health as percentage
 - `getAttackDamage()`: Returns player attack damage
 - `getAttackRange()`: Returns attack reach
-
-#### PhysicsSystem ([src/controllers/PhysicsSystem.ts](src/controllers/PhysicsSystem.ts))
-
-**Purpose:** JavaScript-based physics (fallback when not using WASM).
-
-**Responsibilities:**
-- Apply gravity
-- Handle jumping
-- Ground collision detection
-- Update position based on velocity
-
-**Note:** This is mostly unused in favor of WASM physics, but kept as a fallback.
 
 ### 4. WASM Physics Engine ([game-physics/src/lib.rs](game-physics/src/lib.rs))
 

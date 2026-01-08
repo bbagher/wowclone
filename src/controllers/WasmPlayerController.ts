@@ -10,6 +10,7 @@ import { MovementInput } from '../types';
 import { AnimationController } from './AnimationController';
 import { CameraController } from './CameraController';
 import { PlayerPhysics } from '../wasm/game_physics.js';
+import { GameConfig } from '../config';
 
 export class WasmPlayerController {
     private mesh: Mesh | null = null;
@@ -120,6 +121,14 @@ export class WasmPlayerController {
         const currentTime = performance.now();
         const deltaTime = (currentTime - this.lastFrameTime) / 16.67; // Normalize to 60fps
         this.lastFrameTime = currentTime;
+
+        // Handle character rotation with Q and E keys
+        if (input.rotateLeft) {
+            this.mesh.rotation.y += GameConfig.ROTATION_SPEED;
+        }
+        if (input.rotateRight) {
+            this.mesh.rotation.y -= GameConfig.ROTATION_SPEED;
+        }
 
         // Get camera direction
         const forward = cameraController.getForwardDirection();
@@ -245,6 +254,10 @@ export class WasmPlayerController {
 
     public getBaseOffset(): number {
         return this.baseOffset;
+    }
+
+    public isRotating(input: MovementInput): boolean {
+        return input.rotateLeft || input.rotateRight;
     }
 
     public setSkeletonVerticalOffset(adjustment: number): void {

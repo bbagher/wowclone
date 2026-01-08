@@ -282,11 +282,12 @@ class Game {
         const input = this.inputManager.getMovementInput();
         this.playerController.update(input, this.cameraController);
 
-        // Check if character is moving
+        // Check if character is moving or rotating
         const isMoving = input.forward || input.backward || input.left || input.right;
+        const isRotating = input.rotateLeft || input.rotateRight;
 
-        // Update camera (auto-realign behind character when not dragging and not moving)
-        this.cameraController.update(isMoving);
+        // Update camera (lock behind character when rotating, auto-realign when not dragging and not moving)
+        this.cameraController.update(isMoving, isRotating);
 
         // Update NPCs
         const deltaTime = 1.0; // This should ideally come from physics system

@@ -15,6 +15,8 @@ export interface MovementInput {
     right: boolean;
     jump: boolean;
     sprint: boolean;
+    rotateLeft: boolean;
+    rotateRight: boolean;
 }
 
 export interface AnimationState {

@@ -38,7 +38,9 @@ export class InputManager {
             left: this.inputMap[GameConfig.KEYS.LEFT] || false,
             right: this.inputMap[GameConfig.KEYS.RIGHT] || false,
             jump: this.inputMap[GameConfig.KEYS.JUMP] || false,
-            sprint: this.inputMap[GameConfig.KEYS.SPRINT] || false
+            sprint: this.inputMap[GameConfig.KEYS.SPRINT] || false,
+            rotateLeft: this.inputMap[GameConfig.KEYS.ROTATE_LEFT] || false,
+            rotateRight: this.inputMap[GameConfig.KEYS.ROTATE_RIGHT] || false
         };
     }
 

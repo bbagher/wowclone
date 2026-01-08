@@ -37,8 +37,13 @@ export const GameConfig = {
         LEFT: 'a',
         RIGHT: 'd',
         JUMP: ' ',
-        SPRINT: 'shift'
+        SPRINT: 'shift',
+        ROTATE_LEFT: 'q',
+        ROTATE_RIGHT: 'e'
     },
+
+    // Rotation
+    ROTATION_SPEED: 0.05, // radians per frame
 
     // Keyboard event types
     KEYBOARD_EVENT_TYPE: {

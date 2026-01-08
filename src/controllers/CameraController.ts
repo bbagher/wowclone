@@ -92,7 +92,7 @@ export class CameraController {
         });
     }
 
-    public update(isCharacterMoving: boolean = false): void {
+    public update(isCharacterMoving: boolean = false, isCharacterRotating: boolean = false): void {
         // While dragging, just track the current camera position
         // Don't try to realign - let Babylon's camera controls handle it
         if (this.isRightMouseDown || this.isLeftMouseDown) {
@@ -100,6 +100,17 @@ export class CameraController {
             this.targetAlpha = this.camera.alpha;
             console.log('DRAGGING - left:', this.isLeftMouseDown, 'right:', this.isRightMouseDown, 'alpha:', this.camera.alpha);
             return; // Exit early - don't do any realignment while dragging
+        }
+
+        // Get character's current rotation
+        const target = this.camera.lockedTarget as Mesh;
+
+        // When character is rotating with Q/E, lock camera behind character's back
+        if (isCharacterRotating && target && target.rotation) {
+            // Instantly lock camera behind character during rotation
+            this.camera.alpha = this.calculateCameraAlphaBehindCharacter(target.rotation.y);
+            this.targetAlpha = this.camera.alpha;
+            return;
         }
 
         // While character is moving, don't realign camera
@@ -111,14 +122,11 @@ export class CameraController {
         }
 
         // Auto-realign camera behind character when not dragging AND character is idle
-        const target = this.camera.lockedTarget as Mesh;
         if (target && target.rotation) {
-            // Camera should be behind character's back
-            // Character maintains its facing direction when standing still
-            // When character.rotation.y = 0, character faces +Z (north)
-            // Camera behind character should be at -Z (south), which is alpha = -PI/2
-            // Formula: camera.alpha = character.rotation.y - PI/2
-            this.targetAlpha = this.normalizeAngle(target.rotation.y - Math.PI / 2);
+            // Calculate target position using the same formula to prevent inconsistencies
+            this.targetAlpha = this.normalizeAngle(
+                this.calculateCameraAlphaBehindCharacter(target.rotation.y)
+            );
         }
 
         // Smoothly interpolate camera to target position
@@ -130,6 +138,15 @@ export class CameraController {
             console.log('REALIGNING - target:', this.targetAlpha, 'current:', currentAlpha, 'diff:', diff);
             this.camera.alpha = this.normalizeAngle(currentAlpha + diff * this.realignSpeed);
         }
+    }
+
+    /**
+     * Calculate the camera alpha needed to position the camera behind the character's back.
+     * This is the single source of truth for the camera-to-character lock formula.
+     * Formula from test-orientation.html: camera.alpha = -character.rotation.y - Math.PI / 2
+     */
+    private calculateCameraAlphaBehindCharacter(characterRotationY: number): number {
+        return -characterRotationY - Math.PI / 2;
     }
 
     private normalizeAngle(angle: number): number {

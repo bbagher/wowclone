@@ -101,9 +101,9 @@ export class CameraController {
                     const deltaX = event.clientX - this.lastPointerX;
                     const deltaY = event.clientY - this.lastPointerY;
 
-                    // Apply rotation using the same sensitivity as left mouse
-                    this.camera.alpha += deltaX / this.camera.angularSensibilityX;
-                    this.camera.beta += deltaY / this.camera.angularSensibilityY;
+                    // Apply rotation using the same sensitivity as left mouse (inverted)
+                    this.camera.alpha -= deltaX / this.camera.angularSensibilityX;
+                    this.camera.beta -= deltaY / this.camera.angularSensibilityY;
 
                     // Update last position
                     this.lastPointerX = event.clientX;

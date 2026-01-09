@@ -22,6 +22,8 @@ import { InputManager } from './controllers/InputManager';
 import { EnvironmentManager } from './controllers/EnvironmentManager';
 import { NPCManager } from './controllers/NPCManager';
 import { CombatSystem } from './controllers/CombatSystem';
+import { TargetingSystem } from './controllers/TargetingSystem';
+import { CombatTextManager, DamageType } from './controllers/CombatTextManager';
 import { GameConfig } from './config';
 
 class Game {
@@ -34,6 +36,8 @@ class Game {
     private environmentManager: EnvironmentManager;
     private npcManager: NPCManager;
     private combatSystem: CombatSystem;
+    private targetingSystem: TargetingSystem;
+    private combatTextManager: CombatTextManager;
     private shadowGenerator: ShadowGenerator | null = null;
     private physics!: PlayerPhysics;
 
@@ -57,6 +61,8 @@ class Game {
         this.cameraController = new CameraController(this.scene, this.canvas);
         this.inputManager = new InputManager(this.canvas, this.scene);
         this.combatSystem = new CombatSystem();
+        this.targetingSystem = new TargetingSystem();
+        this.combatTextManager = new CombatTextManager(this.scene);
 
         // These will be initialized after async setup
         this.playerController = null as any; // Temporary
@@ -226,6 +232,9 @@ class Game {
             if (npcCount) {
                 npcCount.textContent = `${this.npcManager.getNPCCount()}`;
             }
+
+            // Update ability bar range indicators
+            this.updateAbilityBar();
         });
 
         // Setup vertical offset slider
@@ -240,37 +249,157 @@ class Game {
             });
         }
 
-        // Setup attack key (F)
+        // Setup ability keybinds and tab targeting
         this.scene.onKeyboardObservable.add((kbInfo) => {
-            const key = kbInfo.event.key.toLowerCase();
+            const key = kbInfo.event.key;
 
-            if (kbInfo.type === GameConfig.KEYBOARD_EVENT_TYPE.KEY_DOWN && key === 'f') {
-                this.performAttack();
+            if (kbInfo.type === GameConfig.KEYBOARD_EVENT_TYPE.KEY_DOWN) {
+                if (key === '1') {
+                    this.useAbility(1);
+                } else if (key === 'Tab') {
+                    kbInfo.event.preventDefault();
+                    this.tabTarget();
+                }
             }
+        });
+
+        // Setup ability bar click handlers
+        document.querySelectorAll('.ability-slot').forEach((slot) => {
+            slot.addEventListener('click', () => {
+                const slotNumber = parseInt(slot.getAttribute('data-slot') || '0');
+                if (slotNumber > 0) {
+                    this.useAbility(slotNumber);
+                }
+            });
         });
     }
 
-    private performAttack() {
+    private useAbility(slotNumber: number) {
+        // Slot 1: Melee Attack
+        if (slotNumber === 1) {
+            this.performMeleeAttack();
+        }
+    }
+
+    private performMeleeAttack() {
         const playerMesh = this.playerController.getMesh();
         if (!playerMesh) return;
+
+        // Check if we have a valid target
+        if (!this.targetingSystem.hasTarget()) {
+            console.log('Melee Attack - No target selected! Press Tab to target an enemy.');
+            return;
+        }
+
+        const target = this.targetingSystem.getCurrentTarget();
+        if (!target) return;
+
+        // Check if target is in range
+        if (!this.targetingSystem.isTargetInRange(playerMesh.position, this.combatSystem.getAttackRange())) {
+            console.log('Melee Attack - Target is out of range!');
+            return;
+        }
+
+        // Check if target is in front of player
+        const playerRotation = playerMesh.rotation.y;
+        if (!this.targetingSystem.isTargetInFront(playerMesh.position, playerRotation)) {
+            console.log('Melee Attack - Target is not in front of you!');
+            return;
+        }
 
         // Play attack animation
         const attacked = this.playerController.performAttack();
         if (!attacked) return;
 
-        // Find and attack nearest NPC
-        const nearestNPC = this.npcManager.findNearestNPC(
-            playerMesh.position,
-            this.combatSystem.getAttackRange()
-        );
+        // Deal damage to target
+        const damageAmount = this.combatSystem.getAttackDamage();
+        const isDead = target.takeDamage(damageAmount);
+        console.log(`Melee Attack! ${target.mesh.name} - ${isDead ? 'KILLED' : `${target.health}/${target.maxHealth} HP`}`);
 
-        if (nearestNPC) {
-            const isDead = nearestNPC.takeDamage(this.combatSystem.getAttackDamage());
-            if (isDead) {
-                console.log(`Killed ${nearestNPC.mesh.name}!`);
+        // Show damage number
+        this.combatTextManager.showDamage(damageAmount, target.mesh.position, DamageType.Outgoing);
+
+        // Visual feedback
+        this.flashAbilitySlot(1);
+        this.updateTargetUI();
+    }
+
+    private updateAbilityBar() {
+        const playerMesh = this.playerController.getMesh();
+        if (!playerMesh) return;
+
+        // Update melee ability slot based on target status
+        const meleeSlot = document.querySelector('.ability-slot[data-slot="1"]');
+        if (meleeSlot) {
+            const hasTarget = this.targetingSystem.hasTarget();
+            const inRange = this.targetingSystem.isTargetInRange(playerMesh.position, this.combatSystem.getAttackRange());
+            const inFront = this.targetingSystem.isTargetInFront(playerMesh.position, playerMesh.rotation.y);
+
+            // Ability is usable if we have a target that's in range and in front of us
+            if (hasTarget && inRange && inFront) {
+                meleeSlot.classList.remove('out-of-range');
             } else {
-                console.log(`Hit ${nearestNPC.mesh.name}! Health: ${nearestNPC.health}/${nearestNPC.maxHealth}`);
+                meleeSlot.classList.add('out-of-range');
             }
+        }
+
+        // Update target UI to reflect dead targets
+        this.updateTargetUI();
+    }
+
+    private flashAbilitySlot(slotNumber: number) {
+        const slot = document.querySelector(`.ability-slot[data-slot="${slotNumber}"]`);
+        if (slot) {
+            slot.classList.add('active');
+            setTimeout(() => {
+                slot.classList.remove('active');
+            }, 200);
+        }
+    }
+
+    private tabTarget() {
+        const playerMesh = this.playerController.getMesh();
+        if (!playerMesh) return;
+
+        const npcs = this.npcManager.getAllNPCs();
+        const target = this.targetingSystem.cycleTarget(npcs, playerMesh.position);
+
+        if (target) {
+            console.log(`Targeted: ${target.mesh.name}`);
+        }
+
+        this.updateTargetUI();
+    }
+
+    private updateTargetUI() {
+        const targetFrame = document.getElementById('target-frame');
+        const targetName = document.getElementById('target-name');
+        const targetHealthText = document.getElementById('target-health-text');
+        const targetHealthFill = document.getElementById('target-health-fill');
+
+        if (!targetFrame || !targetName || !targetHealthText || !targetHealthFill) return;
+
+        const currentTarget = this.targetingSystem.getCurrentTarget();
+
+        if (currentTarget && currentTarget.health > 0) {
+            targetFrame.style.display = 'block';
+            targetName.textContent = currentTarget.mesh.name;
+            targetHealthText.textContent = `${Math.max(0, currentTarget.health).toFixed(0)}/${currentTarget.maxHealth}`;
+
+            const healthPercent = (currentTarget.health / currentTarget.maxHealth) * 100;
+            targetHealthFill.style.width = `${Math.max(0, healthPercent)}%`;
+
+            // Change color based on health
+            if (healthPercent > 50) {
+                targetHealthFill.style.background = 'linear-gradient(to bottom, #ff6666, #cc0000)';
+            } else if (healthPercent > 25) {
+                targetHealthFill.style.background = 'linear-gradient(to bottom, #ffaa00, #ff8800)';
+            } else {
+                targetHealthFill.style.background = 'linear-gradient(to bottom, #ff0000, #aa0000)';
+            }
+        } else {
+            targetFrame.style.display = 'none';
+            this.targetingSystem.clearTarget();
         }
     }
 
@@ -302,6 +431,11 @@ class Game {
         // Apply NPC damage to player
         npcUpdateResult.npcAttacks.forEach(attack => {
             this.combatSystem.takeDamage(attack.damage);
+
+            // Show damage number on player
+            if (playerMesh) {
+                this.combatTextManager.showDamage(attack.damage, playerMesh.position, DamageType.Incoming);
+            }
         });
     }
 
@@ -316,6 +450,7 @@ class Game {
         this.cameraController.dispose();
         this.environmentManager.dispose();
         this.npcManager.dispose();
+        this.combatTextManager.dispose();
         this.scene.dispose();
         this.engine.dispose();
     }

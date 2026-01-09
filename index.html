@@ -83,6 +83,74 @@
             background: rgba(50, 255, 50, 0.6);
             border-color: rgba(100, 255, 100, 0.8);
         }
+
+        #ability-bar {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+            pointer-events: all;
+        }
+
+        .ability-slot {
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(100, 100, 100, 0.8);
+            border-radius: 6px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .ability-slot:hover {
+            border-color: rgba(255, 255, 255, 0.9);
+            background: rgba(30, 30, 30, 0.8);
+        }
+
+        .ability-slot.active {
+            border-color: rgba(255, 215, 0, 1);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+        }
+
+        .ability-slot .keybind {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: bold;
+        }
+
+        .ability-slot .ability-name {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: white;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.9);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+
+        .ability-slot:hover .ability-name {
+            opacity: 1;
+        }
+
+        .ability-slot.out-of-range {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +173,19 @@
         <div id="npc-info" style="margin-top: 15px; font-size: 12px;">
             NPCs Alive: <span id="npc-count">0</span>
         </div>
+
+        <!-- Target Frame -->
+        <div id="target-frame" style="margin-top: 20px; width: 250px; display: none; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+            <div style="font-size: 12px; margin-bottom: 5px; color: #ff6666;">
+                Target: <span id="target-name">None</span>
+            </div>
+            <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,100,100,0.5); border-radius: 4px; overflow: hidden;">
+                <div id="target-health-fill" style="width: 100%; height: 100%; background: linear-gradient(to bottom, #ff6666, #cc0000); transition: width 0.3s;"></div>
+            </div>
+            <div style="font-size: 11px; margin-top: 3px; text-align: right;">
+                <span id="target-health-text">100/100</span>
+            </div>
+        </div>
     </div>
 
     <div id="controls">
@@ -116,8 +197,17 @@
             <li><strong>Right Click + Drag</strong> - Rotate character</li>
             <li><strong>Shift</strong> - Sprint</li>
             <li><strong>Space</strong> - Jump</li>
-            <li><strong>Click</strong> - Attack nearby NPC</li>
+            <li><strong>Tab</strong> - Target enemy</li>
+            <li><strong>1</strong> - Melee Attack (requires target)</li>
         </ul>
+    </div>
+
+    <div id="ability-bar">
+        <div class="ability-slot" data-slot="1">
+            <span class="ability-name">Melee Attack</span>
+            <span style="font-size: 28px;">⚔️</span>
+            <span class="keybind">1</span>
+        </div>
     </div>
 
     <div id="animations" style="position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; color: white; font-size: 12px;">

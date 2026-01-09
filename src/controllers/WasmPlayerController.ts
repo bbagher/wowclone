@@ -124,10 +124,10 @@ export class WasmPlayerController {
 
         // Handle character rotation with Q and E keys
         if (input.rotateLeft) {
-            this.mesh.rotation.y += GameConfig.ROTATION_SPEED;
+            this.mesh.rotation.y -= GameConfig.ROTATION_SPEED;
         }
         if (input.rotateRight) {
-            this.mesh.rotation.y -= GameConfig.ROTATION_SPEED;
+            this.mesh.rotation.y += GameConfig.ROTATION_SPEED;
         }
 
         // Get camera direction

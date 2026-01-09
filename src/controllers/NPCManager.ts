@@ -85,6 +85,10 @@ export class NPCManager {
         return this.npcs.length;
     }
 
+    public getAllNPCs(): NPC[] {
+        return this.npcs.filter(npc => npc.health > 0);
+    }
+
     public dispose(): void {
         // Clean up all NPCs
         this.npcs.forEach(npc => {

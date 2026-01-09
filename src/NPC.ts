@@ -28,8 +28,6 @@ export class NPC {
     private lastAttackTime: number = 0;
     private readonly attackDamage: number = 10;
     private modelRoot: AbstractMesh | null = null;
-    private framesSinceLastSnap: number = 0;
-    private readonly SNAP_INTERVAL: number = 3; // Only snap every N frames to reduce flickering
     private animationGroups: AnimationGroup[] = [];
     private currentAnimation: AnimationGroup | null = null;
 
@@ -220,13 +218,6 @@ export class NPC {
                 const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
                 this.mesh.rotation.y = angle;
             }
-
-            // Snap to ground only every N frames to prevent flickering
-            this.framesSinceLastSnap++;
-            if (this.framesSinceLastSnap >= this.SNAP_INTERVAL) {
-                this.snapToGround();
-                this.framesSinceLastSnap = 0;
-            }
         } else {
             // Idle state - wander around spawn point
             this.state = NPCState.Idle;
@@ -246,13 +237,6 @@ export class NPC {
                     // Adjust rotation by 90 degrees to match model's forward direction
                     const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
                     this.mesh.rotation.y = angle;
-                }
-
-                // Snap to ground only every N frames to prevent flickering
-                this.framesSinceLastSnap++;
-                if (this.framesSinceLastSnap >= this.SNAP_INTERVAL) {
-                    this.snapToGround();
-                    this.framesSinceLastSnap = 0;
                 }
             } else {
                 this.velocity = Vector3.Zero();

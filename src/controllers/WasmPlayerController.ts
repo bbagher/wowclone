@@ -11,6 +11,7 @@ import { AnimationController } from './AnimationController';
 import { CameraController } from './CameraController';
 import { PlayerPhysics } from '../wasm/game_physics.js';
 import { GameConfig } from '../config';
+import { TerrainService } from '../services/TerrainService';
 
 export class WasmPlayerController {
     private mesh: Mesh | null = null;
@@ -21,10 +22,12 @@ export class WasmPlayerController {
     private baseOffset: number = 0;
     private lastFrameTime: number = 0;
     private isAttacking: boolean = false;
+    private terrainService: TerrainService;
 
     constructor(scene: Scene, physics: PlayerPhysics) {
         this.scene = scene;
         this.physics = physics;
+        this.terrainService = new TerrainService(scene);
         this.lastFrameTime = performance.now();
     }
 
@@ -72,6 +75,9 @@ export class WasmPlayerController {
         // Store reference to skeleton root
         this.skeletonRoot = root;
 
+        // Snap player to ground on initial load
+        this.snapPlayerToGround();
+
         // Add shadows to all meshes
         result.meshes.forEach(mesh => {
             if (mesh !== root) {
@@ -91,6 +97,32 @@ export class WasmPlayerController {
         }
 
         console.log('Player setup complete');
+    }
+
+    private snapPlayerToGround(): void {
+        if (!this.mesh || !this.skeletonRoot) return;
+
+        // Get the lowest point of the skeleton model for proper ground alignment
+        const boundingInfo = this.skeletonRoot.getHierarchyBoundingVectors();
+        const lowestPoint = boundingInfo.min.y;
+
+        // Get ground position at current X,Z
+        const groundPos = this.terrainService.snapPositionToGround(
+            this.mesh.position,
+            lowestPoint
+        );
+
+        if (groundPos) {
+            // Update mesh position
+            this.mesh.position.y = groundPos.y;
+
+            // Update physics to match
+            this.physics.set_position(
+                this.mesh.position.x,
+                groundPos.y,
+                this.mesh.position.z
+            );
+        }
     }
 
     private createFallbackModel(shadowGenerator: ShadowGenerator): void {

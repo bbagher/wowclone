@@ -4,12 +4,10 @@ import { MovementInput } from '../types';
 
 export class InputManager {
     private inputMap: { [key: string]: boolean } = {};
-    private canvas: HTMLCanvasElement;
     private scene: Scene;
     private keyboardObserver: any = null;
 
-    constructor(canvas: HTMLCanvasElement, scene: Scene) {
-        this.canvas = canvas;
+    constructor(_canvas: HTMLCanvasElement, scene: Scene) {
         this.scene = scene;
     }
 

@@ -6,7 +6,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
-import { Ray } from '@babylonjs/core/Culling/ray';
+import { TerrainService } from './services/TerrainService';
 
 export enum NPCState {
     Idle,
@@ -27,13 +27,15 @@ export class NPC {
     private lastAttackTime: number = 0;
     private readonly attackDamage: number = 10;
     private modelRoot: AbstractMesh | null = null;
-    private baseOffset: number = 0;
+    private framesSinceLastSnap: number = 0;
+    private readonly SNAP_INTERVAL: number = 3; // Only snap every N frames to reduce flickering
 
     constructor(
         private scene: Scene,
         private spawnPosition: Vector3,
         private name: string,
-        private modelName: string = 'Slime.glb'
+        private modelName: string = 'Slime.glb',
+        private terrainService: TerrainService
     ) {
         // Create invisible controller mesh immediately
         this.mesh = MeshBuilder.CreateBox(`${this.name}_controller`, { size: 0.1 }, this.scene);
@@ -57,14 +59,10 @@ export class NPC {
                 this.modelRoot = result.meshes[0];
                 this.modelRoot.parent = this.mesh;
 
-                // Calculate vertical offset from model's bounding box
-                const boundingInfo = this.modelRoot.getHierarchyBoundingVectors();
-                this.baseOffset = -boundingInfo.min.y;
-
                 // Position model relative to controller
                 this.modelRoot.position = new Vector3(0, 0, 0);
 
-                // Snap controller to ground using raycast
+                // Snap controller to ground using terrain service
                 this.snapToGround();
 
                 // Add shadow casting
@@ -84,32 +82,21 @@ export class NPC {
     }
 
     private snapToGround(): void {
-        // Cast a ray downward from high above the NPC position
-        const origin = this.mesh.position.clone();
-        origin.y = 100; // Start from high up
+        // Get the lowest point of the model for proper ground alignment
+        let lowestPoint = 0;
+        if (this.modelRoot) {
+            const boundingInfo = this.modelRoot.getHierarchyBoundingVectors();
+            lowestPoint = boundingInfo.min.y;
+        }
 
-        const direction = new Vector3(0, -1, 0); // Point downward
-        const length = 200; // Cast far down
+        // Use terrain service to get ground-snapped position
+        const snappedPos = this.terrainService.snapPositionToGround(
+            this.mesh.position,
+            lowestPoint
+        );
 
-        const ray = new Ray(origin, direction, length);
-        const hit = this.scene.pickWithRay(ray, (mesh) => {
-            // Only check against ground mesh
-            return mesh.name === 'ground';
-        });
-
-        if (hit && hit.pickedPoint) {
-            // Get the actual lowest point of the model in world space
-            if (this.modelRoot) {
-                const boundingInfo = this.modelRoot.getHierarchyBoundingVectors();
-                const lowestPoint = boundingInfo.min.y;
-
-                // Place mesh so the model's lowest point touches the ground
-                // Controller is at model origin, so we need to offset by the lowest point
-                this.mesh.position.y = hit.pickedPoint.y - lowestPoint;
-            } else {
-                // Fallback if model not loaded yet
-                this.mesh.position.y = hit.pickedPoint.y;
-            }
+        if (snappedPos) {
+            this.mesh.position.y = snappedPos.y;
         }
     }
 
@@ -194,8 +181,12 @@ export class NPC {
                 this.mesh.rotation.y = angle;
             }
 
-            // Snap to ground after movement
-            this.snapToGround();
+            // Snap to ground only every N frames to prevent flickering
+            this.framesSinceLastSnap++;
+            if (this.framesSinceLastSnap >= this.SNAP_INTERVAL) {
+                this.snapToGround();
+                this.framesSinceLastSnap = 0;
+            }
         } else {
             // Idle state - wander around spawn point
             this.state = NPCState.Idle;
@@ -216,8 +207,12 @@ export class NPC {
                     this.mesh.rotation.y = angle;
                 }
 
-                // Snap to ground after movement
-                this.snapToGround();
+                // Snap to ground only every N frames to prevent flickering
+                this.framesSinceLastSnap++;
+                if (this.framesSinceLastSnap >= this.SNAP_INTERVAL) {
+                    this.snapToGround();
+                    this.framesSinceLastSnap = 0;
+                }
             } else {
                 this.velocity = Vector3.Zero();
             }

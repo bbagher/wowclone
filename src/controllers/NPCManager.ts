@@ -1,6 +1,7 @@
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math';
 import { NPC } from '../NPC';
+import { TerrainService } from '../services/TerrainService';
 
 export interface NPCUpdateResult {
     npcAttacks: Array<{ damage: number }>;
@@ -9,9 +10,11 @@ export interface NPCUpdateResult {
 export class NPCManager {
     private npcs: NPC[] = [];
     private scene: Scene;
+    private terrainService: TerrainService;
 
     constructor(scene: Scene) {
         this.scene = scene;
+        this.terrainService = new TerrainService(scene);
     }
 
     public spawnNPCs(npcCount: number = 1): void {
@@ -29,14 +32,16 @@ export class NPCManager {
 
             const x = Math.cos(angle) * distance;
             const z = Math.sin(angle) * distance;
-            const terrainY = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 2;
 
-            const spawnPos = new Vector3(x, terrainY + 1, z);
+            // Use terrain service to get accurate spawn position
+            // Start with a temporary position, NPC will snap to ground after model loads
+            const tempSpawnPos = this.terrainService.getSpawnPosition(x, z, 0);
+            const spawnPos = tempSpawnPos || new Vector3(x, 0, z);
 
             // Randomly select a monster model
             const modelName = monsterModels[i % monsterModels.length];
 
-            const npc = new NPC(this.scene, spawnPos, `Enemy_${i}`, modelName);
+            const npc = new NPC(this.scene, spawnPos, `Enemy_${i}`, modelName, this.terrainService);
             this.npcs.push(npc);
         }
 
@@ -45,6 +50,11 @@ export class NPCManager {
 
     public update(playerPosition: Vector3, deltaTime: number): NPCUpdateResult {
         const npcAttacks: Array<{ damage: number }> = [];
+
+        // Periodically clean terrain cache to prevent memory buildup
+        if (Math.random() < 0.01) { // ~1% chance per frame
+            this.terrainService.cleanCache();
+        }
 
         // Update each NPC and collect attack results
         for (let i = this.npcs.length - 1; i >= 0; i--) {

@@ -6,20 +6,24 @@ import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { GameConfig } from '../config';
+import { CollisionManager } from '../services/CollisionManager';
 
 interface NatureAsset {
     name: string;
     count: number;
     scale: number;
+    collidable: boolean; // Whether this object should block player movement
 }
 
 export class EnvironmentManager {
     private scene: Scene;
     private shadowGenerator: ShadowGenerator;
+    private collisionManager: CollisionManager;
 
-    constructor(scene: Scene, shadowGenerator: ShadowGenerator) {
+    constructor(scene: Scene, shadowGenerator: ShadowGenerator, collisionManager: CollisionManager) {
         this.scene = scene;
         this.shadowGenerator = shadowGenerator;
+        this.collisionManager = collisionManager;
     }
 
     public async createGround(): Promise<void> {
@@ -54,25 +58,25 @@ export class EnvironmentManager {
         console.log('Loading nature assets...');
 
         const natureAssets: NatureAsset[] = [
-            // Trees
-            { name: 'CommonTree_1.gltf', count: 15, scale: 1.5 },
-            { name: 'CommonTree_2.gltf', count: 12, scale: 1.5 },
-            { name: 'CommonTree_3.gltf', count: 10, scale: 1.5 },
-            { name: 'DeadTree_1.gltf', count: 5, scale: 1.5 },
+            // Trees - solid collision
+            { name: 'CommonTree_1.gltf', count: 15, scale: 1.5, collidable: true },
+            { name: 'CommonTree_2.gltf', count: 12, scale: 1.5, collidable: true },
+            { name: 'CommonTree_3.gltf', count: 10, scale: 1.5, collidable: true },
+            { name: 'DeadTree_1.gltf', count: 5, scale: 1.5, collidable: true },
 
-            // Bushes and vegetation
-            { name: 'Bush_Common.gltf', count: 20, scale: 1.0 },
-            { name: 'Bush_Common_Flowers.gltf', count: 15, scale: 1.0 },
-            { name: 'Fern_1.gltf', count: 25, scale: 0.8 },
+            // Bushes and vegetation - no collision (walkable)
+            { name: 'Bush_Common.gltf', count: 20, scale: 1.0, collidable: false },
+            { name: 'Bush_Common_Flowers.gltf', count: 15, scale: 1.0, collidable: false },
+            { name: 'Fern_1.gltf', count: 25, scale: 0.8, collidable: false },
 
-            // Rocks
-            { name: 'Rock_Medium_1.gltf', count: 15, scale: 1.2 },
-            { name: 'Rock_Medium_2.gltf', count: 12, scale: 1.2 },
-            { name: 'Rock_Small_1.gltf', count: 20, scale: 0.8 },
+            // Rocks - solid collision
+            { name: 'Rock_Medium_1.gltf', count: 15, scale: 1.2, collidable: true },
+            { name: 'Rock_Medium_2.gltf', count: 12, scale: 1.2, collidable: true },
+            { name: 'Rock_Small_1.gltf', count: 20, scale: 0.8, collidable: true },
 
-            // Grass patches
-            { name: 'Grass_Common_Tall.gltf', count: 30, scale: 1.0 },
-            { name: 'Grass_Wispy_Tall.gltf', count: 25, scale: 1.0 },
+            // Grass patches - no collision (walkable)
+            { name: 'Grass_Common_Tall.gltf', count: 30, scale: 1.0, collidable: false },
+            { name: 'Grass_Wispy_Tall.gltf', count: 25, scale: 1.0, collidable: false },
         ];
 
         for (const asset of natureAssets) {
@@ -101,6 +105,9 @@ export class EnvironmentManager {
 
         const templateMesh = result.meshes[0];
         templateMesh.setEnabled(false); // Hide the template
+
+        // Debug: Log mesh hierarchy to understand structure
+        console.log(`${asset.name} mesh hierarchy:`, result.meshes.map(m => `${m.name} (children: ${m.getChildMeshes().length})`));
 
         // Create instances at random positions
         for (let i = 0; i < asset.count; i++) {
@@ -146,6 +153,18 @@ export class EnvironmentManager {
                 // Add shadow casting for larger objects
                 if (asset.name.includes('Tree') || asset.name.includes('Rock')) {
                     this.shadowGenerator.addShadowCaster(instance);
+                }
+
+                // Register collidable objects with collision manager
+                if (asset.collidable) {
+                    // Register the root mesh
+                    this.collisionManager.registerCollidable(instance);
+
+                    // Also register all child meshes with geometry
+                    const childMeshes = instance.getChildMeshes(false);
+                    childMeshes.forEach(child => {
+                        this.collisionManager.registerCollidable(child);
+                    });
                 }
             }
         }

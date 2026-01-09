@@ -25,6 +25,7 @@ import { CombatSystem } from './controllers/CombatSystem';
 import { TargetingSystem } from './controllers/TargetingSystem';
 import { CombatTextManager, DamageType } from './controllers/CombatTextManager';
 import { GameConfig } from './config';
+import { CollisionManager } from './services/CollisionManager';
 
 class Game {
     private canvas: HTMLCanvasElement;
@@ -40,6 +41,7 @@ class Game {
     private combatTextManager: CombatTextManager;
     private shadowGenerator: ShadowGenerator | null = null;
     private physics!: PlayerPhysics;
+    private collisionManager: CollisionManager;
 
     // UI tracking
     private frameCount = 0;
@@ -56,6 +58,9 @@ class Game {
 
         // Enable animations in the scene
         this.scene.animationsEnabled = true;
+
+        // Initialize collision manager first
+        this.collisionManager = new CollisionManager(this.scene);
 
         // Initialize controllers (physics initialized in init())
         this.cameraController = new CameraController(this.scene, this.canvas);
@@ -81,8 +86,8 @@ class Game {
         this.physics = new PlayerPhysics();
         console.log('WASM physics engine loaded!');
 
-        // Now we can create player controller
-        this.playerController = new WasmPlayerController(this.scene, this.physics);
+        // Now we can create player controller with collision manager
+        this.playerController = new WasmPlayerController(this.scene, this.physics, this.collisionManager);
 
         this.setupLights();
         console.log('Lights setup complete');
@@ -152,9 +157,14 @@ class Game {
             throw new Error('Shadow generator not initialized');
         }
 
-        this.environmentManager = new EnvironmentManager(this.scene, this.shadowGenerator);
+        this.environmentManager = new EnvironmentManager(this.scene, this.shadowGenerator, this.collisionManager);
         await this.environmentManager.createGround();
         await this.environmentManager.loadNatureAssets();
+
+        // Enable debug visualization for collision bounds
+        this.collisionManager.enableDebugVisualization(true);
+        console.log('Collision debug visualization enabled');
+        console.log('Registered collidables:', this.collisionManager.getCollidableMeshes().length);
     }
 
     private async createPlayer() {
@@ -451,6 +461,7 @@ class Game {
         this.environmentManager.dispose();
         this.npcManager.dispose();
         this.combatTextManager.dispose();
+        this.collisionManager.dispose();
         this.scene.dispose();
         this.engine.dispose();
     }

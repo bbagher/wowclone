@@ -12,6 +12,7 @@ import { CameraController } from './CameraController';
 import { PlayerPhysics } from '../wasm/game_physics.js';
 import { GameConfig } from '../config';
 import { TerrainService } from '../services/TerrainService';
+import { CollisionManager } from '../services/CollisionManager';
 
 export class WasmPlayerController {
     private mesh: Mesh | null = null;
@@ -23,11 +24,15 @@ export class WasmPlayerController {
     private lastFrameTime: number = 0;
     private isAttacking: boolean = false;
     private terrainService: TerrainService;
+    private collisionManager: CollisionManager;
+    private playerCollisionRadius: number = 0.5; // Player collision capsule radius
+    private debugCollisionCylinder: Mesh | null = null; // Debug visualization
 
-    constructor(scene: Scene, physics: PlayerPhysics) {
+    constructor(scene: Scene, physics: PlayerPhysics, collisionManager: CollisionManager) {
         this.scene = scene;
         this.physics = physics;
         this.terrainService = new TerrainService(scene);
+        this.collisionManager = collisionManager;
         this.lastFrameTime = performance.now();
     }
 
@@ -77,6 +82,9 @@ export class WasmPlayerController {
 
         // Snap player to ground on initial load
         this.snapPlayerToGround();
+
+        // Create debug collision cylinder
+        this.createDebugCollisionCylinder();
 
         // Add shadows to all meshes
         result.meshes.forEach(mesh => {
@@ -175,6 +183,9 @@ export class WasmPlayerController {
         if (input.left) moveX = -1;
         if (input.right) moveX = 1;
 
+        // Store previous position for collision detection
+        const previousPosition = this.mesh.position.clone();
+
         // Update physics in WASM (all calculations happen in Rust)
         this.physics.update(
             moveX,
@@ -188,10 +199,29 @@ export class WasmPlayerController {
             deltaTime
         );
 
-        // Read physics results and apply to player
-        this.mesh.position.x = this.physics.get_position_x();
-        this.mesh.position.y = this.physics.get_position_y();
-        this.mesh.position.z = this.physics.get_position_z();
+        // Read physics results
+        const targetPosition = new Vector3(
+            this.physics.get_position_x(),
+            this.physics.get_position_y(),
+            this.physics.get_position_z()
+        );
+
+        // Check collision and get corrected position
+        const correctedPosition = this.collisionManager.checkCollisionWithSliding(
+            previousPosition,
+            targetPosition,
+            this.playerCollisionRadius
+        );
+
+        // Apply corrected position to player
+        this.mesh.position.copyFrom(correctedPosition);
+
+        // Update physics system with corrected position to keep them in sync
+        this.physics.set_position(
+            correctedPosition.x,
+            correctedPosition.y,
+            correctedPosition.z
+        );
 
         const isMoving = this.physics.is_moving();
 
@@ -336,9 +366,40 @@ export class WasmPlayerController {
         }
     }
 
+    private createDebugCollisionCylinder(): void {
+        if (!this.mesh) return;
+
+        // Create a wireframe cylinder to visualize collision radius
+        this.debugCollisionCylinder = MeshBuilder.CreateCylinder(
+            'playerCollisionDebug',
+            {
+                height: 2,
+                diameter: this.playerCollisionRadius * 2,
+                tessellation: 16
+            },
+            this.scene
+        );
+
+        // Make it wireframe and transparent
+        const debugMaterial = new StandardMaterial('debugCollisionMat', this.scene);
+        debugMaterial.wireframe = true;
+        debugMaterial.emissiveColor = new Color3(0, 1, 0); // Green
+        debugMaterial.alpha = 0.5;
+        this.debugCollisionCylinder.material = debugMaterial;
+
+        // Parent to player mesh
+        this.debugCollisionCylinder.parent = this.mesh;
+        this.debugCollisionCylinder.position.y = 1; // Center at player height
+
+        console.log(`Player collision debug cylinder created (radius: ${this.playerCollisionRadius})`);
+    }
+
     public dispose(): void {
         if (this.animationController) {
             this.animationController.dispose();
+        }
+        if (this.debugCollisionCylinder) {
+            this.debugCollisionCylinder.dispose();
         }
         if (this.mesh) {
             this.mesh.dispose();

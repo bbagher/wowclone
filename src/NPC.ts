@@ -6,6 +6,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+import { AnimationGroup } from '@babylonjs/core/Animations/animationGroup';
 import { TerrainService } from './services/TerrainService';
 
 export enum NPCState {
@@ -29,6 +30,8 @@ export class NPC {
     private modelRoot: AbstractMesh | null = null;
     private framesSinceLastSnap: number = 0;
     private readonly SNAP_INTERVAL: number = 3; // Only snap every N frames to reduce flickering
+    private animationGroups: AnimationGroup[] = [];
+    private currentAnimation: AnimationGroup | null = null;
 
     constructor(
         private scene: Scene,
@@ -61,6 +64,15 @@ export class NPC {
 
                 // Position model relative to controller
                 this.modelRoot.position = new Vector3(0, 0, 0);
+
+                // Store animation groups
+                this.animationGroups = result.animationGroups;
+
+                // Start with idle animation if available
+                const idleAnim = this.findAnimation('idle');
+                if (idleAnim) {
+                    this.playAnimation(idleAnim);
+                }
 
                 // Snap controller to ground using terrain service
                 this.snapToGround();
@@ -100,6 +112,30 @@ export class NPC {
         }
     }
 
+    private findAnimation(name: string): AnimationGroup | null {
+        const lowerName = name.toLowerCase();
+        return this.animationGroups.find(anim =>
+            anim.name.toLowerCase().includes(lowerName)
+        ) || null;
+    }
+
+    private playAnimation(animation: AnimationGroup): void {
+        if (this.currentAnimation === animation && animation.isPlaying) {
+            return; // Already playing this animation
+        }
+
+        // Stop all other animations
+        this.animationGroups.forEach(anim => {
+            if (anim !== animation && anim.isPlaying) {
+                anim.stop();
+            }
+        });
+
+        // Play the new animation
+        this.currentAnimation = animation;
+        animation.start(true, 1.0, animation.from, animation.to, false);
+    }
+
     private createFallbackMesh(): void {
         // Fallback to capsule if model fails to load
         const fallback = MeshBuilder.CreateCapsule(
@@ -133,6 +169,8 @@ export class NPC {
         let attacked = false;
         let damage = 0;
 
+        const previousState = this.state;
+
         // State machine
         if (distanceToPlayer <= this.attackRange) {
             // Attack state
@@ -143,7 +181,8 @@ export class NPC {
             const direction = playerPosition.subtract(this.mesh.position);
             direction.y = 0;
             if (direction.length() > 0) {
-                const angle = Math.atan2(direction.x, direction.z);
+                // Adjust rotation by 90 degrees to match model's forward direction
+                const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
                 this.mesh.rotation.y = angle;
             }
 
@@ -177,7 +216,8 @@ export class NPC {
 
             // Face movement direction
             if (this.velocity.length() > 0) {
-                const angle = Math.atan2(direction.x, direction.z);
+                // Adjust rotation by 90 degrees to match model's forward direction
+                const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
                 this.mesh.rotation.y = angle;
             }
 
@@ -203,7 +243,8 @@ export class NPC {
 
                 // Face movement direction
                 if (this.velocity.length() > 0) {
-                    const angle = Math.atan2(direction.x, direction.z);
+                    // Adjust rotation by 90 degrees to match model's forward direction
+                    const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
                     this.mesh.rotation.y = angle;
                 }
 
@@ -218,7 +259,39 @@ export class NPC {
             }
         }
 
+        // Update animations based on state changes
+        if (previousState !== this.state) {
+            this.updateStateAnimation();
+        }
+
         return { attacked, damage };
+    }
+
+    private updateStateAnimation(): void {
+        if (this.animationGroups.length === 0) return;
+
+        switch (this.state) {
+            case NPCState.Attacking:
+                const attackAnim = this.findAnimation('attack');
+                if (attackAnim) {
+                    this.playAnimation(attackAnim);
+                }
+                break;
+
+            case NPCState.Chasing:
+                const walkAnim = this.findAnimation('walk') || this.findAnimation('run');
+                if (walkAnim) {
+                    this.playAnimation(walkAnim);
+                }
+                break;
+
+            case NPCState.Idle:
+                const idleAnim = this.findAnimation('idle');
+                if (idleAnim) {
+                    this.playAnimation(idleAnim);
+                }
+                break;
+        }
     }
 
     public takeDamage(damage: number): boolean {
@@ -244,20 +317,39 @@ export class NPC {
     }
 
     private die(): void {
-        // Death animation - fade out and fall
-        if (this.modelRoot) {
-            // Fade out the model
-            this.modelRoot.getChildMeshes().forEach(mesh => {
-                const material = mesh.material as StandardMaterial;
-                if (material) {
-                    material.alpha = 0.5;
+        // Play death animation if available
+        const deathAnim = this.findAnimation('death') || this.findAnimation('die');
+
+        if (deathAnim) {
+            // Stop all other animations
+            this.animationGroups.forEach(anim => {
+                if (anim !== deathAnim) {
+                    anim.stop();
                 }
             });
-        }
 
-        setTimeout(() => {
-            this.dispose();
-        }, 1000);
+            // Play death animation once (not looping)
+            deathAnim.start(false, 1.0, deathAnim.from, deathAnim.to, false);
+
+            // Wait for animation to complete before disposing
+            deathAnim.onAnimationGroupEndObservable.addOnce(() => {
+                this.dispose();
+            });
+        } else {
+            // Fallback: fade out if no death animation
+            if (this.modelRoot) {
+                this.modelRoot.getChildMeshes().forEach(mesh => {
+                    const material = mesh.material as StandardMaterial;
+                    if (material) {
+                        material.alpha = 0.5;
+                    }
+                });
+            }
+
+            setTimeout(() => {
+                this.dispose();
+            }, 1000);
+        }
     }
 
     public getState(): string {
@@ -270,6 +362,14 @@ export class NPC {
     }
 
     public dispose(): void {
+        // Stop and dispose all animations
+        this.animationGroups.forEach(anim => {
+            anim.stop();
+            anim.dispose();
+        });
+        this.animationGroups = [];
+
+        // Dispose meshes
         if (this.modelRoot) {
             this.modelRoot.dispose();
         }

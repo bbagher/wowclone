@@ -280,6 +280,12 @@ export class CollisionManager {
         cylinderData: CustomCollisionData
     ): boolean {
         // First check Y bounds (height check)
+        // If player is standing on top (at maxY), don't block horizontal movement
+        const standingOnTop = Math.abs(playerPos.y - cylinderData.maxY) < 0.1;
+        if (standingOnTop) {
+            return false; // Allow walking on top
+        }
+
         if (playerPos.y < cylinderData.minY || playerPos.y > cylinderData.maxY) {
             return false;
         }
@@ -291,6 +297,54 @@ export class CollisionManager {
         const combinedRadius = playerRadius + cylinderData.radius;
 
         return horizontalDistSq < combinedRadius * combinedRadius;
+    }
+
+    /**
+     * Check if player should land on top of a cylinder (rock, platform, etc.)
+     * Returns the top Y position if player should land on top, otherwise null
+     *
+     * This allows jumping on top of rocks and other collidable objects
+     */
+    public checkLandOnTop(
+        position: Vector3,
+        playerRadius: number = this.playerRadius
+    ): number | null {
+        if (this.collidableMeshes.size === 0) {
+            return null;
+        }
+
+        let highestTopY: number | null = null;
+
+        // Check all collidable meshes
+        for (const mesh of this.collidableMeshes) {
+            if (!mesh.isEnabled() || !mesh.isVisible) continue;
+
+            const customData = this.customCollisions.get(mesh);
+            if (!customData) continue; // Only check objects with custom collision data
+
+            // Check horizontal distance (2D circle collision in XZ plane)
+            const dx = position.x - customData.center.x;
+            const dz = position.z - customData.center.z;
+            const horizontalDistSq = dx * dx + dz * dz;
+            const combinedRadius = playerRadius + customData.radius;
+
+            // If player is within horizontal bounds of the cylinder
+            if (horizontalDistSq < combinedRadius * combinedRadius) {
+                // Check if player is at or above the top of the cylinder
+                // We use a small threshold to allow for landing
+                const topY = customData.maxY;
+
+                // Only consider this surface if it's below the player (falling/landing)
+                // and it's the highest one we've found
+                if (position.y >= topY - 0.5) { // 0.5 unit threshold for landing detection
+                    if (highestTopY === null || topY > highestTopY) {
+                        highestTopY = topY;
+                    }
+                }
+            }
+        }
+
+        return highestTopY;
     }
 
     /**

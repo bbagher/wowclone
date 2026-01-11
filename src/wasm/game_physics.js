@@ -60,6 +60,15 @@ export class PlayerPhysics {
         return ret;
     }
     /**
+     * Set the grounded state and reset vertical velocity
+     * This is called from TypeScript when collision detection determines
+     * the player has landed on a surface (ground, rock, platform, etc.)
+     * @param {boolean} grounded
+     */
+    set_grounded(grounded) {
+        wasm.playerphysics_set_grounded(this.__wbg_ptr, grounded);
+    }
+    /**
      * @param {number} x
      * @param {number} y
      * @param {number} z

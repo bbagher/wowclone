@@ -213,6 +213,19 @@ export class WasmPlayerController {
             this.playerCollisionRadius
         );
 
+        // Check if player should land on top of a rock or platform
+        const landOnTopY = this.collisionManager.checkLandOnTop(
+            correctedPosition,
+            this.playerCollisionRadius
+        );
+
+        // If player should land on top, snap to that height
+        if (landOnTopY !== null && correctedPosition.y <= landOnTopY) {
+            correctedPosition.y = landOnTopY;
+            // Tell physics system we're grounded (resets vertical velocity)
+            this.physics.set_grounded(true);
+        }
+
         // Apply corrected position to player
         this.mesh.position.copyFrom(correctedPosition);
 

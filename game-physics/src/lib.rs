@@ -92,6 +92,16 @@ impl PlayerPhysics {
         self.position.z = z;
     }
 
+    /// Set the grounded state and reset vertical velocity
+    /// This is called from TypeScript when collision detection determines
+    /// the player has landed on a surface (ground, rock, platform, etc.)
+    pub fn set_grounded(&mut self, grounded: bool) {
+        self.is_grounded = grounded;
+        if grounded {
+            self.velocity.y = 0.0;
+        }
+    }
+
     /// Update physics simulation
     /// Parameters:
     /// - move_x: horizontal movement input (-1 to 1)

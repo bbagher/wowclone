@@ -5,6 +5,12 @@ export class PlayerPhysics {
   free(): void;
   [Symbol.dispose](): void;
   get_rotation(): number;
+  /**
+   * Set the grounded state and reset vertical velocity
+   * This is called from TypeScript when collision detection determines
+   * the player has landed on a surface (ground, rock, platform, etc.)
+   */
+  set_grounded(grounded: boolean): void;
   set_position(x: number, y: number, z: number): void;
   get_position_x(): number;
   get_position_y(): number;
@@ -63,6 +69,7 @@ export interface InitOutput {
   readonly playerphysics_get_position_z: (a: number) => number;
   readonly playerphysics_is_moving: (a: number) => number;
   readonly playerphysics_new: () => number;
+  readonly playerphysics_set_grounded: (a: number, b: number) => void;
   readonly playerphysics_set_position: (a: number, b: number, c: number, d: number) => void;
   readonly playerphysics_update: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => void;
   readonly vector3_add: (a: number, b: number) => number;

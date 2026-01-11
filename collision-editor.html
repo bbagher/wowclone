@@ -267,23 +267,34 @@
                 Loading assets...
             </div>
 
+            <div class="button-group">
+                <button onclick="previousAsset()" style="flex: 0 0 auto; width: 60px;">◀ Prev</button>
+                <button onclick="nextAsset()" style="flex: 0 0 auto; width: 60px;">Next ▶</button>
+                <button onclick="autoFitCollision()" style="flex: 1;">🎯 Auto Fit</button>
+            </div>
+
             <div id="controls">
                 <!-- Controls will be dynamically generated -->
             </div>
 
             <div class="button-group">
                 <button class="export-button" onclick="exportSettings()">📋 Export JSON</button>
-                <button class="reset-button" onclick="resetAll()">🔄 Reset All</button>
+                <button class="reset-button" onclick="resetCurrent()">🔄 Reset Current</button>
+            </div>
+
+            <div class="button-group">
+                <button onclick="copyToClipboard()" style="background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);">📄 Copy to Clipboard</button>
             </div>
 
             <div id="output"></div>
 
             <div class="info-text">
                 💡 <strong>Tips:</strong><br>
-                • Adjust sliders to see real-time collision changes<br>
-                • Red = Trees (trunk collision), Blue = Rocks (full collision)<br>
-                • Export JSON when done to use in your game<br>
-                • Click asset names to switch between objects
+                • <strong>Auto Fit (A)</strong>: Calculate collision from model bounds<br>
+                • <strong>← →</strong>: Navigate between assets<br>
+                • <strong>R</strong>: Reset current asset<br>
+                • <strong>E</strong>: Export JSON • <strong>C</strong>: Copy to clipboard<br>
+                • Colors: Red = Trees, Blue = Rocks, Green = Bushes, Yellow = Plants
             </div>
         </div>
 
@@ -310,6 +321,7 @@
         import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
         import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
         import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+        import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
         import '@babylonjs/loaders/glTF';
         import '@babylonjs/core/Helpers/sceneHelpers';
 
@@ -322,13 +334,18 @@
             { name: 'Rock_Medium_1.gltf', type: 'rock', displayName: 'Medium Rock 1' },
             { name: 'Rock_Medium_2.gltf', type: 'rock', displayName: 'Medium Rock 2' },
             { name: 'Rock_Small_1.gltf', type: 'rock', displayName: 'Small Rock' },
+            { name: 'Bush_Common.gltf', type: 'bush', displayName: 'Common Bush' },
+            { name: 'Bush_Common_Flowers.gltf', type: 'bush', displayName: 'Bush with Flowers' },
+            { name: 'Fern_1.gltf', type: 'plant', displayName: 'Fern' },
+            { name: 'Grass_Common_Tall.gltf', type: 'grass', displayName: 'Tall Grass' },
+            { name: 'Grass_Wispy_Tall.gltf', type: 'grass', displayName: 'Wispy Grass' },
         ];
 
-        // Default collision settings
+        // Default collision settings - using cylinder collision (radius-based)
         const defaultSettings = {
-            radiusMultiplier: 1.0,
-            heightMultiplier: 0.3,
-            heightOffset: 0.0,
+            radius: 0.5,        // Cylinder radius in world units
+            height: 2.0,        // Cylinder height in world units
+            offsetY: 0.0,       // Y offset from ground
             enabled: true
         };
 
@@ -373,69 +390,67 @@
         ground.material = groundMat;
         ground.receiveShadows = true;
 
-        // Generate UI controls
+        // Generate UI controls for the current asset
         function generateControls() {
             const controlsDiv = document.getElementById('controls');
-            const uniqueTypes = [...new Set(assets.map(a => a.type))];
+            const asset = assets[currentAssetIndex];
+            const settings = collisionSettings[asset.name];
 
             controlsDiv.innerHTML = '';
 
-            assets.forEach((asset, index) => {
-                const section = document.createElement('div');
-                section.className = `asset-section ${asset.type}`;
-                section.innerHTML = `
-                    <h2 style="cursor: pointer;" onclick="loadAsset(${index})">${asset.displayName}</h2>
-                    <div class="control-group">
-                        <label>Radius Multiplier</label>
-                        <div class="slider-container">
-                            <input type="range"
-                                   id="${asset.name}-radius"
-                                   min="0.1"
-                                   max="3.0"
-                                   step="0.1"
-                                   value="${collisionSettings[asset.name].radiusMultiplier}"
-                                   oninput="updateSetting('${asset.name}', 'radiusMultiplier', this.value)">
-                            <span class="value-display" id="${asset.name}-radius-value">${collisionSettings[asset.name].radiusMultiplier.toFixed(1)}</span>
-                        </div>
+            const section = document.createElement('div');
+            section.className = `asset-section ${asset.type}`;
+            section.innerHTML = `
+                <div class="control-group">
+                    <label>Collision Radius</label>
+                    <div class="slider-container">
+                        <input type="range"
+                               id="${asset.name}-radius"
+                               min="0.1"
+                               max="5.0"
+                               step="0.1"
+                               value="${settings.radius}"
+                               oninput="updateSetting('${asset.name}', 'radius', this.value)">
+                        <span class="value-display" id="${asset.name}-radius-value">${settings.radius.toFixed(1)}</span>
                     </div>
-                    <div class="control-group">
-                        <label>Height Multiplier</label>
-                        <div class="slider-container">
-                            <input type="range"
-                                   id="${asset.name}-height"
-                                   min="0.1"
-                                   max="2.0"
-                                   step="0.05"
-                                   value="${collisionSettings[asset.name].heightMultiplier}"
-                                   oninput="updateSetting('${asset.name}', 'heightMultiplier', this.value)">
-                            <span class="value-display" id="${asset.name}-height-value">${collisionSettings[asset.name].heightMultiplier.toFixed(2)}</span>
-                        </div>
+                </div>
+                <div class="control-group">
+                    <label>Collision Height</label>
+                    <div class="slider-container">
+                        <input type="range"
+                               id="${asset.name}-height"
+                               min="0.1"
+                               max="10.0"
+                               step="0.1"
+                               value="${settings.height}"
+                               oninput="updateSetting('${asset.name}', 'height', this.value)">
+                        <span class="value-display" id="${asset.name}-height-value">${settings.height.toFixed(1)}</span>
                     </div>
-                    <div class="control-group">
-                        <label>Height Offset (Y)</label>
-                        <div class="slider-container">
-                            <input type="range"
-                                   id="${asset.name}-offset"
-                                   min="-2.0"
-                                   max="2.0"
-                                   step="0.1"
-                                   value="${collisionSettings[asset.name].heightOffset}"
-                                   oninput="updateSetting('${asset.name}', 'heightOffset', this.value)">
-                            <span class="value-display" id="${asset.name}-offset-value">${collisionSettings[asset.name].heightOffset.toFixed(1)}</span>
-                        </div>
+                </div>
+                <div class="control-group">
+                    <label>Y Offset</label>
+                    <div class="slider-container">
+                        <input type="range"
+                               id="${asset.name}-offsetY"
+                               min="-5.0"
+                               max="5.0"
+                               step="0.1"
+                               value="${settings.offsetY}"
+                               oninput="updateSetting('${asset.name}', 'offsetY', this.value)">
+                        <span class="value-display" id="${asset.name}-offsetY-value">${settings.offsetY.toFixed(1)}</span>
                     </div>
-                    <div class="control-group">
-                        <div class="checkbox-container">
-                            <input type="checkbox"
-                                   id="${asset.name}-enabled"
-                                   ${collisionSettings[asset.name].enabled ? 'checked' : ''}
-                                   onchange="updateSetting('${asset.name}', 'enabled', this.checked)">
-                            <label for="${asset.name}-enabled" style="margin: 0;">Collision Enabled</label>
-                        </div>
+                </div>
+                <div class="control-group">
+                    <div class="checkbox-container">
+                        <input type="checkbox"
+                               id="${asset.name}-enabled"
+                               ${settings.enabled ? 'checked' : ''}
+                               onchange="updateSetting('${asset.name}', 'enabled', this.checked)">
+                        <label for="${asset.name}-enabled" style="margin: 0;">Collision Enabled</label>
                     </div>
-                `;
-                controlsDiv.appendChild(section);
-            });
+                </div>
+            `;
+            controlsDiv.appendChild(section);
         }
 
         // Update setting
@@ -444,8 +459,10 @@
                 collisionSettings[assetName][property] = value;
             } else {
                 collisionSettings[assetName][property] = parseFloat(value);
-                document.getElementById(`${assetName}-${property}-value`).textContent =
-                    property === 'heightMultiplier' ? parseFloat(value).toFixed(2) : parseFloat(value).toFixed(1);
+                const element = document.getElementById(`${assetName}-${property}-value`);
+                if (element) {
+                    element.textContent = parseFloat(value).toFixed(1);
+                }
             }
 
             // Update visualization if this is the current asset
@@ -457,20 +474,29 @@
 
         // Load asset
         window.loadAsset = async function(index) {
+            if (index < 0 || index >= assets.length) return;
+
             currentAssetIndex = index;
             const asset = assets[index];
 
-            document.getElementById('currentAsset').textContent = `📦 ${asset.displayName}`;
+            document.getElementById('currentAsset').textContent = `⏳ Loading ${asset.displayName}...`;
 
-            // Remove old mesh
+            // Remove old mesh and all its children
             if (currentMesh) {
-                currentMesh.dispose();
+                if (currentMesh.parent) {
+                    currentMesh.parent.dispose();
+                } else {
+                    currentMesh.dispose();
+                }
+                currentMesh = null;
             }
             if (debugCylinder) {
                 debugCylinder.dispose();
+                debugCylinder = null;
             }
 
             try {
+                console.log(`Attempting to load: /assets/nature/glTF/${asset.name}`);
                 const result = await SceneLoader.ImportMeshAsync(
                     '',
                     '/assets/nature/glTF/',
@@ -478,51 +504,47 @@
                     scene
                 );
 
+                console.log(`Loaded ${result.meshes.length} meshes for ${asset.name}`);
                 if (result.meshes.length > 0) {
-                    currentMesh = result.meshes[0];
-                    currentMesh.position = Vector3.Zero();
+                    const rootMesh = result.meshes[0];
+                    rootMesh.position = Vector3.Zero();
 
-                    // Find the largest child mesh
-                    let bestChild = null;
-                    let bestVolume = 0;
-                    const children = currentMesh.getChildMeshes(false);
-
-                    children.forEach(child => {
-                        const bounds = child.getBoundingInfo();
-                        if (bounds) {
-                            const size = bounds.boundingBox.extendSize;
-                            const volume = size.x * size.y * size.z;
-                            if (volume > bestVolume) {
-                                bestChild = child;
-                                bestVolume = volume;
-                            }
+                    // Add shadows to all meshes
+                    result.meshes.forEach(mesh => {
+                        if (mesh.getTotalVertices() > 0) {
+                            shadowGenerator.addShadowCaster(mesh);
                         }
                     });
 
-                    // Use the best child for collision visualization
-                    if (bestChild) {
-                        currentMesh = bestChild;
-                    }
+                    // Get hierarchy bounds for proper positioning
+                    const bounds = rootMesh.getHierarchyBoundingVectors();
+                    const min = bounds.min;
+                    const max = bounds.max;
 
-                    // Add shadows
-                    shadowGenerator.addShadowCaster(currentMesh);
+                    // Position so the lowest point is on the ground
+                    rootMesh.position.y = -min.y;
 
-                    // Position on ground
-                    const bounds = currentMesh.getHierarchyBoundingVectors();
-                    currentMesh.position.y = -bounds.min.y;
+                    // Store reference to root mesh
+                    currentMesh = rootMesh;
 
-                    // Update camera
-                    const size = bounds.max.subtract(bounds.min);
+                    // Update camera to frame the object nicely
+                    const size = max.subtract(min);
                     const maxDim = Math.max(size.x, size.y, size.z);
-                    camera.radius = maxDim * 2.5;
-                    camera.target = currentMesh.position.clone();
+                    camera.radius = maxDim * 3;
+                    camera.target = new Vector3(0, size.y / 2, 0);
 
                     // Create debug visualization
                     updateDebugVisualization();
+
+                    // Update controls for new asset
+                    generateControls();
+
+                    document.getElementById('currentAsset').textContent = `📦 ${asset.displayName} (${currentAssetIndex + 1}/${assets.length})`;
+                    console.log(`Loaded ${asset.displayName} - Bounds: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
                 }
             } catch (error) {
                 console.error('Failed to load asset:', error);
-                document.getElementById('currentAsset').textContent = `❌ Failed to load ${asset.displayName}`;
+                document.getElementById('currentAsset').textContent = `❌ Failed: ${asset.displayName} - ${error.message}`;
             }
         };
 
@@ -530,6 +552,7 @@
         function updateDebugVisualization() {
             if (debugCylinder) {
                 debugCylinder.dispose();
+                debugCylinder = null;
             }
 
             if (!currentMesh) return;
@@ -539,41 +562,110 @@
 
             if (!settings.enabled) return;
 
-            const bounds = currentMesh.getBoundingInfo();
-            const size = bounds.boundingBox.extendSize;
-            const min = bounds.boundingBox.minimumWorld;
-
-            // Calculate dimensions
-            const baseRadius = Math.min(size.x, size.z);
-            const diameter = baseRadius * 2 * settings.radiusMultiplier;
-            const fullHeight = size.y * 2;
-            const cylinderHeight = fullHeight * settings.heightMultiplier;
-
-            // Create cylinder
+            // Create cylinder with the specified dimensions
             debugCylinder = MeshBuilder.CreateCylinder(
                 'debugCylinder',
                 {
-                    height: cylinderHeight,
-                    diameter: diameter,
-                    tessellation: 16
+                    height: settings.height,
+                    diameter: settings.radius * 2,
+                    tessellation: 24
                 },
                 scene
             );
 
-            // Position
-            debugCylinder.position.x = bounds.boundingBox.centerWorld.x;
-            debugCylinder.position.z = bounds.boundingBox.centerWorld.z;
-            debugCylinder.position.y = min.y + cylinderHeight / 2 + settings.heightOffset;
+            // Position cylinder at the origin with Y offset
+            debugCylinder.position.x = 0;
+            debugCylinder.position.z = 0;
+            debugCylinder.position.y = settings.height / 2 + settings.offsetY;
 
-            // Material
+            // Material based on asset type
             const mat = new StandardMaterial('debugMat', scene);
             mat.wireframe = true;
-            mat.emissiveColor = asset.type === 'tree' ? new Color3(1, 0, 0) : new Color3(0, 0.5, 1);
-            mat.alpha = 0.6;
+
+            // Color coding by type
+            if (asset.type === 'tree') {
+                mat.emissiveColor = new Color3(1, 0, 0); // Red for trees
+            } else if (asset.type === 'rock') {
+                mat.emissiveColor = new Color3(0, 0.5, 1); // Blue for rocks
+            } else if (asset.type === 'bush') {
+                mat.emissiveColor = new Color3(0, 1, 0); // Green for bushes
+            } else {
+                mat.emissiveColor = new Color3(1, 1, 0); // Yellow for others
+            }
+
+            mat.alpha = 0.7;
             debugCylinder.material = mat;
 
             debugCylinder.isPickable = false;
+            debugCylinder.checkCollisions = false;
         }
+
+        // Navigation functions
+        window.previousAsset = function() {
+            const newIndex = currentAssetIndex - 1;
+            if (newIndex >= 0) {
+                loadAsset(newIndex);
+            }
+        };
+
+        window.nextAsset = function() {
+            const newIndex = currentAssetIndex + 1;
+            if (newIndex < assets.length) {
+                loadAsset(newIndex);
+            }
+        };
+
+        // Auto-fit collision to mesh bounds
+        window.autoFitCollision = function() {
+            if (!currentMesh) return;
+
+            const asset = assets[currentAssetIndex];
+            const bounds = currentMesh.getHierarchyBoundingVectors();
+            const size = bounds.max.subtract(bounds.min);
+
+            // Calculate appropriate collision cylinder
+            // Use the average of X and Z for radius (assuming roughly circular footprint)
+            const radius = (size.x + size.z) / 4; // Divide by 4 because we want radius, not diameter
+
+            // For height, use a fraction of the model height depending on type
+            let heightMultiplier = 0.5; // Default
+            if (asset.type === 'tree') {
+                heightMultiplier = 0.3; // Trees: just the trunk
+            } else if (asset.type === 'rock') {
+                heightMultiplier = 0.8; // Rocks: most of the height
+            } else if (asset.type === 'bush' || asset.type === 'plant') {
+                heightMultiplier = 0.5; // Bushes/plants: middle ground
+            }
+
+            const height = size.y * heightMultiplier;
+
+            // Update settings
+            collisionSettings[asset.name].radius = Math.max(0.1, radius);
+            collisionSettings[asset.name].height = Math.max(0.1, height);
+            collisionSettings[asset.name].offsetY = 0;
+
+            // Update UI
+            const radiusInput = document.getElementById(`${asset.name}-radius`);
+            const heightInput = document.getElementById(`${asset.name}-height`);
+            const offsetInput = document.getElementById(`${asset.name}-offsetY`);
+
+            if (radiusInput) {
+                radiusInput.value = collisionSettings[asset.name].radius;
+                document.getElementById(`${asset.name}-radius-value`).textContent =
+                    collisionSettings[asset.name].radius.toFixed(1);
+            }
+            if (heightInput) {
+                heightInput.value = collisionSettings[asset.name].height;
+                document.getElementById(`${asset.name}-height-value`).textContent =
+                    collisionSettings[asset.name].height.toFixed(1);
+            }
+            if (offsetInput) {
+                offsetInput.value = 0;
+                document.getElementById(`${asset.name}-offsetY-value`).textContent = '0.0';
+            }
+
+            updateDebugVisualization();
+        };
 
         // Export settings
         window.exportSettings = function() {
@@ -581,28 +673,93 @@
             const json = JSON.stringify(collisionSettings, null, 2);
             output.innerHTML = `<pre>${json}</pre>`;
             output.classList.add('show');
+        };
 
-            // Copy to clipboard
+        // Copy to clipboard
+        window.copyToClipboard = function() {
+            const json = JSON.stringify(collisionSettings, null, 2);
             navigator.clipboard.writeText(json).then(() => {
-                console.log('Settings copied to clipboard!');
+                alert('✅ Collision settings copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('❌ Failed to copy to clipboard');
             });
         };
 
-        // Reset all
-        window.resetAll = function() {
-            assets.forEach(asset => {
-                collisionSettings[asset.name] = { ...defaultSettings };
-            });
-            generateControls();
-            if (currentMesh) {
-                updateDebugVisualization();
+        // Reset current asset
+        window.resetCurrent = function() {
+            const asset = assets[currentAssetIndex];
+            collisionSettings[asset.name] = { ...defaultSettings };
+
+            // Update UI controls for current asset
+            const radiusInput = document.getElementById(`${asset.name}-radius`);
+            const heightInput = document.getElementById(`${asset.name}-height`);
+            const offsetInput = document.getElementById(`${asset.name}-offsetY`);
+            const enabledInput = document.getElementById(`${asset.name}-enabled`);
+
+            if (radiusInput) {
+                radiusInput.value = defaultSettings.radius;
+                document.getElementById(`${asset.name}-radius-value`).textContent =
+                    defaultSettings.radius.toFixed(1);
             }
+            if (heightInput) {
+                heightInput.value = defaultSettings.height;
+                document.getElementById(`${asset.name}-height-value`).textContent =
+                    defaultSettings.height.toFixed(1);
+            }
+            if (offsetInput) {
+                offsetInput.value = defaultSettings.offsetY;
+                document.getElementById(`${asset.name}-offsetY-value`).textContent =
+                    defaultSettings.offsetY.toFixed(1);
+            }
+            if (enabledInput) {
+                enabledInput.checked = defaultSettings.enabled;
+            }
+
+            updateDebugVisualization();
+
             const output = document.getElementById('output');
             output.classList.remove('show');
         };
 
+        // Keyboard shortcuts
+        window.addEventListener('keydown', (event) => {
+            // Don't interfere if user is typing in an input
+            if (event.target.tagName === 'INPUT') return;
+
+            switch(event.key) {
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    previousAsset();
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    nextAsset();
+                    break;
+                case 'a':
+                    event.preventDefault();
+                    autoFitCollision();
+                    break;
+                case 'r':
+                    event.preventDefault();
+                    resetCurrent();
+                    break;
+                case 'e':
+                    event.preventDefault();
+                    exportSettings();
+                    break;
+                case 'c':
+                    event.preventDefault();
+                    copyToClipboard();
+                    break;
+            }
+        });
+
         // Initialize
+        console.log('Initializing collision editor...');
+        console.log('Total assets:', assets.length);
         generateControls();
+        console.log('Loading first asset...');
         loadAsset(0);
 
         // Render loop

@@ -1,0 +1,74 @@
+{
+  "CommonTree_1.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "CommonTree_2.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "CommonTree_3.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "DeadTree_1.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Rock_Medium_1.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Rock_Medium_2.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Rock_Small_1.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Bush_Common.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Bush_Common_Flowers.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Fern_1.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Grass_Common_Tall.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  },
+  "Grass_Wispy_Tall.gltf": {
+    "radius": 0.5,
+    "height": 2.0,
+    "offsetY": 0.0,
+    "enabled": true
+  }
+}

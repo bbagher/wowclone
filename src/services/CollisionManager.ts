@@ -4,14 +4,33 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import collisionConfigData from '../collision-config.json';
+
+interface CollisionConfig {
+    radius: number;
+    height: number;
+    offsetY: number;
+    enabled: boolean;
+}
+
+interface CustomCollisionData {
+    center: Vector3;
+    radius: number;
+    minY: number;
+    maxY: number;
+}
+
+type CollisionConfigMap = Record<string, CollisionConfig>;
+const collisionConfig = collisionConfigData as CollisionConfigMap;
 
 /**
  * CollisionManager handles static object collision detection
- * Uses bounding box/sphere intersection for efficient collision checking
+ * Uses custom cylindrical collision shapes defined in collision-config.json
  * This is similar to how WoW handles collision with environmental objects
  */
 export class CollisionManager {
     private collidableMeshes: Set<AbstractMesh> = new Set();
+    private customCollisions: Map<AbstractMesh, CustomCollisionData> = new Map();
     private playerRadius: number = 0.5; // Collision capsule radius
     private debugMode: boolean = false;
     private debugMeshes: Map<AbstractMesh, Mesh> = new Map();
@@ -22,37 +41,92 @@ export class CollisionManager {
     }
 
     /**
-     * Register a mesh as collidable
-     * Creates simplified collision geometry for efficient checks
+     * Extract the asset filename from a mesh's metadata or name
      */
-    public registerCollidable(mesh: AbstractMesh): void {
+    private getAssetName(mesh: AbstractMesh): string | null {
+        // Check metadata first
+        if (mesh.metadata?.assetName) {
+            return mesh.metadata.assetName;
+        }
+
+        // Try to find it from the root parent's name
+        let current: AbstractMesh | null = mesh;
+        while (current) {
+            if (current.name && current.name.includes('.gltf')) {
+                return current.name;
+            }
+            current = current.parent as AbstractMesh | null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Register a mesh as collidable
+     * Uses custom collision shapes from collision-config.json if available
+     */
+    public registerCollidable(mesh: AbstractMesh, assetName?: string): void {
         if (!mesh) return;
 
-        // Skip meshes without geometry (empty parent nodes)
         const boundingInfo = mesh.getBoundingInfo();
         if (!boundingInfo) return;
-
-        // Check if this mesh has actual geometry (not just a container)
-        const boundingSize = boundingInfo.boundingBox.extendSize;
-        const volume = boundingSize.x * boundingSize.y * boundingSize.z;
-
-        // Skip if bounding box is too small (degenerate) or suspiciously large (likely a parent container)
-        if (volume < 0.001 || volume > 10000) {
-            return;
-        }
 
         // Compute bounding info for this mesh
         mesh.computeWorldMatrix(true);
 
-        // Mark mesh as collidable
-        mesh.checkCollisions = true;
+        // Try to get asset name
+        const meshAssetName = assetName || this.getAssetName(mesh);
 
-        // Store in our collection
-        this.collidableMeshes.add(mesh);
+        // Check if we have custom collision config for this asset
+        if (meshAssetName && collisionConfig[meshAssetName]) {
+            const config = collisionConfig[meshAssetName];
 
-        if (this.debugMode) {
-            console.log(`Registered ${mesh.name} - volume: ${volume.toFixed(2)}, bounds: ${boundingSize.x.toFixed(2)}x${boundingSize.y.toFixed(2)}x${boundingSize.z.toFixed(2)}`);
-            this.createDebugVisualization(mesh);
+            // Skip if collision is disabled for this asset
+            if (!config.enabled) {
+                if (this.debugMode) {
+                    console.log(`Skipping ${meshAssetName} - collision disabled in config`);
+                }
+                return;
+            }
+
+            // Get mesh position (use world position)
+            const position = mesh.getAbsolutePosition();
+
+            // Create custom collision data using the configured cylinder
+            const customData: CustomCollisionData = {
+                center: new Vector3(position.x, position.y + config.height / 2 + config.offsetY, position.z),
+                radius: config.radius,
+                minY: position.y + config.offsetY,
+                maxY: position.y + config.offsetY + config.height
+            };
+
+            this.customCollisions.set(mesh, customData);
+            this.collidableMeshes.add(mesh);
+
+            if (this.debugMode) {
+                console.log(`Registered ${meshAssetName} with custom collision - radius: ${config.radius}, height: ${config.height}`);
+                this.createDebugVisualization(mesh);
+            }
+        } else {
+            // Fall back to automatic bounding box collision
+            const boundingSize = boundingInfo.boundingBox.extendSize;
+            const volume = boundingSize.x * boundingSize.y * boundingSize.z;
+
+            // Skip if bounding box is too small (degenerate) or suspiciously large (likely a parent container)
+            if (volume < 0.001 || volume > 10000) {
+                return;
+            }
+
+            // Mark mesh as collidable
+            mesh.checkCollisions = true;
+
+            // Store in our collection
+            this.collidableMeshes.add(mesh);
+
+            if (this.debugMode) {
+                console.log(`Registered ${mesh.name} with auto collision - volume: ${volume.toFixed(2)}, bounds: ${boundingSize.x.toFixed(2)}x${boundingSize.y.toFixed(2)}x${boundingSize.z.toFixed(2)}`);
+                this.createDebugVisualization(mesh);
+            }
         }
     }
 
@@ -61,6 +135,7 @@ export class CollisionManager {
      */
     public unregisterCollidable(mesh: AbstractMesh): void {
         this.collidableMeshes.delete(mesh);
+        this.customCollisions.delete(mesh);
         mesh.checkCollisions = false;
 
         // Remove debug visualization
@@ -100,28 +175,43 @@ export class CollisionManager {
         for (const mesh of this.collidableMeshes) {
             if (!mesh.isEnabled() || !mesh.isVisible) continue;
 
-            const boundingInfo = mesh.getBoundingInfo();
-            if (!boundingInfo) continue;
+            // Check if this mesh has custom collision data
+            const customData = this.customCollisions.get(mesh);
 
-            // Get mesh bounding sphere for broad phase
-            const meshCenter = boundingInfo.boundingSphere.centerWorld;
-            const meshRadius = boundingInfo.boundingSphere.radiusWorld;
-
-            // Broad phase: Check if player sphere could possibly intersect
-            const distToMesh = Vector3.Distance(to, meshCenter);
-            const combinedRadius = playerRadius + meshRadius;
-
-            if (distToMesh < combinedRadius) {
-                // Narrow phase: More precise collision check
-                if (this.isPointInsideOrNearMesh(to, mesh, playerRadius)) {
-                    // Instead of pushing out, just stop at current position
-                    // This prevents bouncing/jittering
+            if (customData) {
+                // Use custom cylindrical collision
+                if (this.checkCylinderCollision(to, playerRadius, customData)) {
+                    // Collision detected - stop at previous position
                     correctedPosition.x = from.x;
                     correctedPosition.z = from.z;
                     correctedPosition.y = to.y; // Allow vertical movement (jumping/falling)
-
-                    // Early exit - we found a collision, use previous position
                     return correctedPosition;
+                }
+            } else {
+                // Use default bounding box collision
+                const boundingInfo = mesh.getBoundingInfo();
+                if (!boundingInfo) continue;
+
+                // Get mesh bounding sphere for broad phase
+                const meshCenter = boundingInfo.boundingSphere.centerWorld;
+                const meshRadius = boundingInfo.boundingSphere.radiusWorld;
+
+                // Broad phase: Check if player sphere could possibly intersect
+                const distToMesh = Vector3.Distance(to, meshCenter);
+                const combinedRadius = playerRadius + meshRadius;
+
+                if (distToMesh < combinedRadius) {
+                    // Narrow phase: More precise collision check
+                    if (this.isPointInsideOrNearMesh(to, mesh, playerRadius)) {
+                        // Instead of pushing out, just stop at current position
+                        // This prevents bouncing/jittering
+                        correctedPosition.x = from.x;
+                        correctedPosition.z = from.z;
+                        correctedPosition.y = to.y; // Allow vertical movement (jumping/falling)
+
+                        // Early exit - we found a collision, use previous position
+                        return correctedPosition;
+                    }
                 }
             }
         }
@@ -181,6 +271,29 @@ export class CollisionManager {
     }
 
     /**
+     * Check collision with a custom cylindrical collision shape
+     * Returns true if the player (at position with radius) collides with the cylinder
+     */
+    private checkCylinderCollision(
+        playerPos: Vector3,
+        playerRadius: number,
+        cylinderData: CustomCollisionData
+    ): boolean {
+        // First check Y bounds (height check)
+        if (playerPos.y < cylinderData.minY || playerPos.y > cylinderData.maxY) {
+            return false;
+        }
+
+        // Check horizontal distance (2D circle collision in XZ plane)
+        const dx = playerPos.x - cylinderData.center.x;
+        const dz = playerPos.z - cylinderData.center.z;
+        const horizontalDistSq = dx * dx + dz * dz;
+        const combinedRadius = playerRadius + cylinderData.radius;
+
+        return horizontalDistSq < combinedRadius * combinedRadius;
+    }
+
+    /**
      * Check if a point is inside or very close to a mesh's bounding volume
      */
     private isPointInsideOrNearMesh(
@@ -228,43 +341,63 @@ export class CollisionManager {
     }
 
     /**
-     * Create a custom debug visualization box for a collidable mesh
+     * Create a custom debug visualization for a collidable mesh
      */
     private createDebugVisualization(mesh: AbstractMesh): void {
-        const boundingInfo = mesh.getBoundingInfo();
-        if (!boundingInfo) return;
+        const customData = this.customCollisions.get(mesh);
 
-        const boundingBox = boundingInfo.boundingBox;
-        const size = boundingBox.extendSize;
-        const center = boundingBox.centerWorld;
+        let debugShape: Mesh;
 
-        // Create a wireframe box matching the bounding box
-        const debugBox = MeshBuilder.CreateBox(
-            `debug_${mesh.name}`,
-            {
-                width: size.x * 2,
-                height: size.y * 2,
-                depth: size.z * 2
-            },
-            this.scene
-        );
+        if (customData) {
+            // Create a wireframe cylinder for custom collision
+            debugShape = MeshBuilder.CreateCylinder(
+                `debug_${mesh.name}`,
+                {
+                    height: customData.maxY - customData.minY,
+                    diameter: customData.radius * 2,
+                    tessellation: 16
+                },
+                this.scene
+            );
 
-        // Position at the bounding box center
-        debugBox.position = center.clone();
+            // Position at the cylinder center
+            debugShape.position = customData.center.clone();
+        } else {
+            // Create a wireframe box for default bounding box collision
+            const boundingInfo = mesh.getBoundingInfo();
+            if (!boundingInfo) return;
+
+            const boundingBox = boundingInfo.boundingBox;
+            const size = boundingBox.extendSize;
+            const center = boundingBox.centerWorld;
+
+            debugShape = MeshBuilder.CreateBox(
+                `debug_${mesh.name}`,
+                {
+                    width: size.x * 2,
+                    height: size.y * 2,
+                    depth: size.z * 2
+                },
+                this.scene
+            );
+
+            // Position at the bounding box center
+            debugShape.position = center.clone();
+        }
 
         // Make it wireframe and semi-transparent
         const debugMaterial = new StandardMaterial(`debugMat_${mesh.name}`, this.scene);
         debugMaterial.wireframe = true;
-        debugMaterial.emissiveColor = new Color3(1, 0, 0); // Red
+        debugMaterial.emissiveColor = customData ? new Color3(0, 1, 0) : new Color3(1, 0, 0); // Green for custom, Red for default
         debugMaterial.alpha = 0.6;
-        debugBox.material = debugMaterial;
+        debugShape.material = debugMaterial;
 
-        // Don't let debug boxes collide or cast shadows
-        debugBox.isPickable = false;
-        debugBox.checkCollisions = false;
+        // Don't let debug shapes collide or cast shadows
+        debugShape.isPickable = false;
+        debugShape.checkCollisions = false;
 
         // Store reference
-        this.debugMeshes.set(mesh, debugBox);
+        this.debugMeshes.set(mesh, debugShape);
     }
 
     /**

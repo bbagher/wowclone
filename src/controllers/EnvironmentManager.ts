@@ -154,13 +154,13 @@ export class EnvironmentManager {
 
                 // Register collidable objects with collision manager
                 if (asset.collidable) {
-                    // Register the root mesh
-                    this.collisionManager.registerCollidable(instance);
+                    // Register the root mesh with the asset name for custom collision config
+                    this.collisionManager.registerCollidable(instance, asset.name);
 
                     // Also register all child meshes with geometry
                     const childMeshes = instance.getChildMeshes(false);
                     childMeshes.forEach(child => {
-                        this.collisionManager.registerCollidable(child);
+                        this.collisionManager.registerCollidable(child, asset.name);
                     });
                 }
             }

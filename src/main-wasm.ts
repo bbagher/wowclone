@@ -164,6 +164,9 @@ class Game {
         await this.environmentManager.createGround();
         await this.environmentManager.loadNatureAssets();
 
+        // Initialize NPC pathfinding after environment is loaded
+        this.npcManager.initializePathfinding(this.collisionManager);
+
         // Disable debug visualization for collision bounds
         this.collisionManager.enableDebugVisualization(false);
         console.log('Registered collidables:', this.collisionManager.getCollidableMeshes().length);

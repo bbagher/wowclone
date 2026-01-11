@@ -2,6 +2,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math';
 import { NPC } from '../NPC';
 import { TerrainService } from '../services/TerrainService';
+import { PathfindingService } from '../services/PathfindingService';
 
 export interface NPCUpdateResult {
     npcAttacks: Array<{ damage: number }>;
@@ -11,10 +12,16 @@ export class NPCManager {
     private npcs: NPC[] = [];
     private scene: Scene;
     private terrainService: TerrainService;
+    private pathfindingService: PathfindingService | null = null;
+    private worldSize: number;
+    private pathfindingCellSize: number;
 
-    constructor(scene: Scene) {
+    constructor(scene: Scene, worldSize: number = 100, pathfindingCellSize: number = 1.0) {
         this.scene = scene;
         this.terrainService = new TerrainService(scene);
+        this.worldSize = worldSize;
+        this.pathfindingCellSize = pathfindingCellSize;
+        // PathfindingService will be created after WASM is initialized
     }
 
     public spawnNPCs(npcCount: number = 1): void {
@@ -41,11 +48,45 @@ export class NPCManager {
             // Randomly select a monster model
             const modelName = monsterModels[i % monsterModels.length];
 
-            const npc = new NPC(this.scene, spawnPos, `Enemy_${i}`, modelName, this.terrainService);
+            const npc = new NPC(
+                this.scene,
+                spawnPos,
+                `Enemy_${i}`,
+                modelName,
+                this.terrainService,
+                this.pathfindingService || undefined
+            );
             this.npcs.push(npc);
         }
 
         console.log(`Spawned ${npcCount} NPCs with models: ${monsterModels.join(', ')}`);
+    }
+
+    /**
+     * Initialize pathfinding grid from collision manager
+     * Should be called after WASM is loaded and environment assets are loaded
+     */
+    public initializePathfinding(collisionManager: any): void {
+        // Create pathfinding service now that WASM is initialized
+        if (!this.pathfindingService) {
+            this.pathfindingService = new PathfindingService(this.worldSize, this.pathfindingCellSize);
+        }
+
+        this.pathfindingService.buildNavigationGrid(collisionManager);
+
+        // Update all existing NPCs with the pathfinding service
+        for (const npc of this.npcs) {
+            (npc as any).pathfindingService = this.pathfindingService;
+        }
+
+        console.log('NPC pathfinding initialized and assigned to NPCs');
+    }
+
+    /**
+     * Get pathfinding service for debugging or external use
+     */
+    public getPathfindingService(): PathfindingService | null {
+        return this.pathfindingService;
     }
 
     public update(playerPosition: Vector3, deltaTime: number): NPCUpdateResult {

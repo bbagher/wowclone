@@ -234,10 +234,11 @@ The negative sign inverts the rotation direction, and the -π/2 offset accounts 
 
 #### NPCManager ([src/controllers/NPCManager.ts](src/controllers/NPCManager.ts))
 
-**Purpose:** Spawns and manages enemy NPCs.
+**Purpose:** Spawns and manages enemy NPCs with WASM-powered pathfinding.
 
 **Responsibilities:**
 - Spawn NPCs at random positions
+- Initialize pathfinding navigation grid
 - Update all NPCs each frame
 - Find nearest NPC for combat
 - Remove dead NPCs
@@ -245,14 +246,17 @@ The negative sign inverts the rotation direction, and the -π/2 offset accounts 
 
 **Key Methods:**
 - `spawnNPCs()`: Creates enemies with random models
+- `initializePathfinding()`: Builds navigation grid from collision data
 - `update()`: Updates all NPCs, returns attack results
 - `findNearestNPC()`: Finds closest enemy within range
 - `getNPCCount()`: Returns alive NPC count
+- `getPathfindingService()`: Returns pathfinding service for debugging
 
 **NPC Behavior:**
 - Each NPC has its own AI (see NPC.ts)
-- Chase player when in range
-- Attack when close enough
+- **Wander** around spawn point using A* pathfinding when idle
+- **Chase** player when in detection range (15 units)
+- **Attack** when close enough (2.5 units)
 - Die when health reaches zero
 
 #### CombatSystem ([src/controllers/CombatSystem.ts](src/controllers/CombatSystem.ts))
@@ -276,7 +280,8 @@ The negative sign inverts the rotation direction, and the -π/2 offset accounts 
 
 Written in **Rust** for maximum performance, compiled to WebAssembly.
 
-**PlayerPhysics Struct:**
+#### PlayerPhysics Struct
+
 ```rust
 pub struct PlayerPhysics {
     position: Vector3,
@@ -296,10 +301,36 @@ pub struct PlayerPhysics {
 - `get_movement_angle()`: Get rotation for character facing
 - `is_moving()`: Check if player is moving
 
+#### Pathfinder Struct (A* Pathfinding)
+
+```rust
+pub struct Pathfinder {
+    grid: Vec<bool>,        // Navigation grid (walkable/blocked)
+    grid_size: usize,       // Grid dimensions
+    cell_size: f32,         // Size of each cell
+    world_offset: f32,      // Centering offset
+}
+```
+
+**Key Methods:**
+- `new()`: Initialize pathfinding grid
+- `find_path()`: A* algorithm to find optimal path
+- `set_blocked_circle()`: Mark obstacles as blocked
+- `is_walkable()`: Check if position is walkable
+- `get_random_walkable_position()`: Random valid position for wandering
+
+**Pathfinding Features:**
+- **Grid-based navigation**: Configurable cell size (default 1.0 unit)
+- **A* algorithm**: Optimal path with diagonal movement support
+- **Obstacle avoidance**: Uses collision data to mark blocked areas
+- **Random wandering**: NPCs pick random valid destinations
+- **Performance**: BinaryHeap for efficient pathfinding in WASM
+
 **Why Rust/WASM?**
-- **Performance**: Physics calculations run at native speed
+- **Performance**: Physics and pathfinding run at native speed
 - **Consistency**: Same behavior across all browsers
-- **Scalability**: Can handle complex physics without JS overhead
+- **Scalability**: Can handle complex calculations without JS overhead
+- **Memory efficiency**: Grid stored as compact Vec<bool>
 
 **Build Command:**
 ```bash
@@ -308,10 +339,11 @@ npm run build:wasm  # Compiles Rust to WASM
 
 ### 5. NPC AI ([src/NPC.ts](src/NPC.ts))
 
-Each NPC is an autonomous entity with its own AI.
+Each NPC is an autonomous entity with its own pathfinding-based AI.
 
 **Responsibilities:**
 - Load monster model (Slime, Bat, Skeleton)
+- **Wander** around spawn point using A* pathfinding
 - Chase player when in detection range
 - Attack player when in melee range
 - Play animations (idle, walk, attack, death)
@@ -319,12 +351,26 @@ Each NPC is an autonomous entity with its own AI.
 - Handle death (play animation, disable)
 
 **AI States:**
-- **Idle**: Default state, out of range
-- **Chasing**: Moving toward player
-- **Attacking**: In range, playing attack animation
+- **Idle**: Waiting to generate a new wander path (3-second cooldown)
+- **Wandering**: Following waypoints along pathfound route (slower movement)
+- **Chasing**: Moving directly toward player (faster movement)
+- **Attacking**: In melee range, playing attack animation
+
+**Wandering Behavior:**
+- Picks random destination within 20 units of spawn point
+- Uses WASM A* pathfinding to avoid obstacles (trees, rocks)
+- Follows waypoints with smooth rotation
+- Waits 3 seconds between paths
+- Interrupted by player detection
+
+**Movement Speeds:**
+- Wandering: 0.05 (slow, casual)
+- Chasing: 0.15 (fast, aggressive)
 
 **Key Methods:**
-- `update()`: AI loop, returns attack result
+- `update()`: AI state machine loop, returns attack result
+- `updateWanderingBehavior()`: Handles pathfinding and waypoint following
+- `generateWanderPath()`: Creates new random path using pathfinding service
 - `takeDamage()`: Reduces health, returns if dead
 - `die()`: Plays death animation, marks as dead
 
@@ -579,24 +625,79 @@ const input = this.inputManager.getMovementInput();
 console.log('Input:', input);
 ```
 
+## Pathfinding System
+
+### PathfindingService ([src/services/PathfindingService.ts](src/services/PathfindingService.ts))
+
+**Purpose:** TypeScript wrapper around WASM pathfinding with collision integration.
+
+**Responsibilities:**
+- Initialize WASM pathfinder with world size and grid resolution
+- Build navigation grid from collision manager data
+- Provide high-level pathfinding API for NPCs
+- Handle coordinate conversion (world ↔ grid)
+
+**Key Methods:**
+- `buildNavigationGrid()`: Marks all collision obstacles as blocked
+- `findPath()`: Returns array of Vector3 waypoints
+- `getRandomWalkablePosition()`: Random valid position within radius
+- `isWalkable()`: Check if position is blocked
+- `setBlocked()`: Manually mark areas as blocked
+
+**Configuration:**
+```typescript
+// Default settings (can be customized)
+worldSize: 100          // Match game world size
+cellSize: 1.0           // Grid resolution (smaller = more precise, slower)
+gridSize: 100           // Calculated from worldSize / cellSize
+```
+
+**Integration Flow:**
+1. NPCManager creates PathfindingService on construction
+2. After environment loads, `initializePathfinding()` called
+3. PathfindingService reads all collision obstacles
+4. Marks circular areas around trees, rocks as blocked
+5. NPCs receive pathfinding service reference
+6. NPCs use service to find paths avoiding obstacles
+
+**Example Usage:**
+```typescript
+// Find path from NPC to random destination
+const randomGoal = pathfindingService.getRandomWalkablePosition(
+    npcPosition,
+    20  // 20 unit radius
+);
+
+const waypoints = pathfindingService.findPath(
+    npcPosition,
+    randomGoal
+);
+
+// NPC follows waypoints
+for (const waypoint of waypoints) {
+    moveTowards(waypoint);
+}
+```
+
 ## Known Limitations
 
 1. **Simple Ground Collision**: Currently a flat Y-plane. No terrain raycasting yet.
 2. **No Animation Blending**: Animations switch instantly (no crossfade).
-3. **Basic NPC AI**: Simple chase/attack. No pathfinding or obstacles.
+3. **Grid-based Pathfinding**: Uses grid cells, not navmesh (less precise around obstacles).
 4. **No Networking**: Single-player only (multiplayer requires server).
 
 ## Future Enhancements
 
 - Terrain raycasting (walk on hills/slopes)
 - Animation blending (smooth transitions)
-- NPC pathfinding (A* or navmesh)
+- NavMesh pathfinding (more precise than grid-based)
+- Dynamic obstacle updates (moving objects)
 - Multiplayer support (WebSocket server)
 - Inventory system
 - Quest system
 - Sound effects and music
 - Particle effects (hits, death, abilities)
-- Minimap
+- Minimap with pathfinding visualization
 - Save/load system
 
 ## Tech Stack

@@ -1,6 +1,33 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export class Pathfinder {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Check if a cell is walkable
+   */
+  is_walkable(x: number, z: number): boolean;
+  /**
+   * Mark a cell as blocked (obstacle)
+   */
+  set_blocked(x: number, z: number): void;
+  /**
+   * Mark a circular area as blocked
+   */
+  set_blocked_circle(x: number, z: number, radius: number): void;
+  /**
+   * Get a random walkable position within bounds
+   */
+  get_random_walkable_position(center_x: number, center_z: number, radius: number): Float32Array;
+  constructor(grid_size: number, cell_size: number, world_size: number);
+  /**
+   * Find path using A* algorithm
+   * Returns a flat array of [x1, z1, x2, z2, ...] coordinates in world space
+   */
+  find_path(start_x: number, start_z: number, goal_x: number, goal_z: number): Float32Array;
+}
+
 export class PlayerPhysics {
   free(): void;
   [Symbol.dispose](): void;
@@ -57,12 +84,19 @@ export interface InitOutput {
   readonly __wbg_get_vector3_x: (a: number) => number;
   readonly __wbg_get_vector3_y: (a: number) => number;
   readonly __wbg_get_vector3_z: (a: number) => number;
+  readonly __wbg_pathfinder_free: (a: number, b: number) => void;
   readonly __wbg_playerphysics_free: (a: number, b: number) => void;
   readonly __wbg_set_vector3_x: (a: number, b: number) => void;
   readonly __wbg_set_vector3_y: (a: number, b: number) => void;
   readonly __wbg_set_vector3_z: (a: number, b: number) => void;
   readonly __wbg_vector3_free: (a: number, b: number) => void;
   readonly init: () => void;
+  readonly pathfinder_find_path: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+  readonly pathfinder_get_random_walkable_position: (a: number, b: number, c: number, d: number) => [number, number];
+  readonly pathfinder_is_walkable: (a: number, b: number, c: number) => number;
+  readonly pathfinder_new: (a: number, b: number, c: number) => number;
+  readonly pathfinder_set_blocked: (a: number, b: number, c: number) => void;
+  readonly pathfinder_set_blocked_circle: (a: number, b: number, c: number, d: number) => void;
   readonly playerphysics_get_movement_angle: (a: number) => number;
   readonly playerphysics_get_position_x: (a: number) => number;
   readonly playerphysics_get_position_y: (a: number) => number;
@@ -79,6 +113,7 @@ export interface InitOutput {
   readonly vector3_scale: (a: number, b: number) => number;
   readonly playerphysics_get_rotation: (a: number) => number;
   readonly __wbindgen_externrefs: WebAssembly.Table;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_start: () => void;
 }
 

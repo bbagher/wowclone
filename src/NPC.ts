@@ -11,9 +11,11 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { AnimationGroup } from '@babylonjs/core/Animations/animationGroup';
 import { TerrainService } from './services/TerrainService';
+import { PathfindingService } from './services/PathfindingService';
 
 export enum NPCState {
     Idle,
+    Wandering,
     Chasing,
     Attacking
 }
@@ -25,6 +27,7 @@ export class NPC {
     public state: NPCState = NPCState.Idle;
     private velocity: Vector3 = Vector3.Zero();
     private readonly moveSpeed: number = 0.15;
+    private readonly wanderSpeed: number = 0.05;
     private readonly detectionRange: number = 15;
     private readonly attackRange: number = 2.5;
     private readonly attackCooldown: number = 1000; // ms
@@ -34,12 +37,21 @@ export class NPC {
     private animationGroups: AnimationGroup[] = [];
     private currentAnimation: AnimationGroup | null = null;
 
+    // Wandering behavior
+    private wanderPath: Vector3[] = [];
+    private currentWaypointIndex: number = 0;
+    private readonly wanderRadius: number = 20;
+    private readonly waypointReachedThreshold: number = 1.0;
+    private readonly wanderCooldownTime: number = 3000; // ms between wander paths
+    private lastWanderTime: number = 0;
+
     constructor(
         private scene: Scene,
         private spawnPosition: Vector3,
         private name: string,
         private modelName: string = 'Slime.glb',
-        private terrainService: TerrainService
+        private terrainService: TerrainService,
+        private pathfindingService?: PathfindingService
     ) {
         // Create invisible controller mesh immediately
         this.mesh = MeshBuilder.CreateBox(`${this.name}_controller`, { size: 0.1 }, this.scene);
@@ -177,6 +189,7 @@ export class NPC {
             // Attack state
             this.state = NPCState.Attacking;
             this.velocity = Vector3.Zero();
+            this.wanderPath = []; // Clear wander path
 
             // Face the player
             const direction = playerPosition.subtract(this.mesh.position);
@@ -205,6 +218,7 @@ export class NPC {
         } else if (distanceToPlayer <= this.detectionRange) {
             // Chase state
             this.state = NPCState.Chasing;
+            this.wanderPath = []; // Clear wander path
 
             // Calculate direction to player
             const direction = playerPosition.subtract(this.mesh.position);
@@ -222,28 +236,8 @@ export class NPC {
                 this.mesh.rotation.y = angle;
             }
         } else {
-            // Idle state - wander around spawn point
-            this.state = NPCState.Idle;
-
-            // Simple idle behavior - slowly return to spawn point if too far
-            const distanceToSpawn = Vector3.Distance(this.mesh.position, this.spawnPosition);
-            if (distanceToSpawn > 5) {
-                const direction = this.spawnPosition.subtract(this.mesh.position);
-                direction.y = 0;
-                direction.normalize();
-
-                this.velocity = direction.scale(this.moveSpeed * 0.3 * deltaTime);
-                this.mesh.position.addInPlace(this.velocity);
-
-                // Face movement direction
-                if (this.velocity.length() > 0) {
-                    // Adjust rotation by 90 degrees to match model's forward direction
-                    const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
-                    this.mesh.rotation.y = angle;
-                }
-            } else {
-                this.velocity = Vector3.Zero();
-            }
+            // Wandering/Idle state
+            this.updateWanderingBehavior(deltaTime);
         }
 
         // Update animations based on state changes
@@ -252,6 +246,92 @@ export class NPC {
         }
 
         return { attacked, damage };
+    }
+
+    /**
+     * Handle wandering behavior using pathfinding
+     */
+    private updateWanderingBehavior(deltaTime: number): void {
+        const currentTime = Date.now();
+
+        // Check if we have a pathfinding service
+        if (!this.pathfindingService) {
+            // Fallback to simple idle behavior
+            this.state = NPCState.Idle;
+            this.velocity = Vector3.Zero();
+            return;
+        }
+
+        // If we have an active path, follow it
+        if (this.wanderPath.length > 0 && this.currentWaypointIndex < this.wanderPath.length) {
+            this.state = NPCState.Wandering;
+
+            const targetWaypoint = this.wanderPath[this.currentWaypointIndex];
+            const direction = targetWaypoint.subtract(this.mesh.position);
+            direction.y = 0;
+
+            const distanceToWaypoint = direction.length();
+
+            // Check if we reached the waypoint
+            if (distanceToWaypoint < this.waypointReachedThreshold) {
+                this.currentWaypointIndex++;
+
+                // If we reached the end of the path, start cooldown
+                if (this.currentWaypointIndex >= this.wanderPath.length) {
+                    this.wanderPath = [];
+                    this.currentWaypointIndex = 0;
+                    this.lastWanderTime = currentTime;
+                    this.state = NPCState.Idle;
+                    this.velocity = Vector3.Zero();
+                }
+            } else {
+                // Move towards waypoint
+                direction.normalize();
+                this.velocity = direction.scale(this.wanderSpeed * deltaTime);
+                this.mesh.position.addInPlace(this.velocity);
+
+                // Face movement direction
+                if (this.velocity.length() > 0) {
+                    const angle = Math.atan2(direction.x, direction.z) + Math.PI / 2;
+                    this.mesh.rotation.y = angle;
+                }
+            }
+        } else {
+            // No active path - check if we should generate a new one
+            this.state = NPCState.Idle;
+            this.velocity = Vector3.Zero();
+
+            const timeSinceLastWander = currentTime - this.lastWanderTime;
+            if (timeSinceLastWander >= this.wanderCooldownTime) {
+                this.generateWanderPath();
+            }
+        }
+    }
+
+    /**
+     * Generate a new random wander path using pathfinding
+     */
+    private generateWanderPath(): void {
+        if (!this.pathfindingService) {
+            return;
+        }
+
+        // Get a random walkable destination within wander radius
+        const randomGoal = this.pathfindingService.getRandomWalkablePosition(
+            this.spawnPosition,
+            this.wanderRadius
+        );
+
+        if (randomGoal) {
+            // Find path to random goal
+            const path = this.pathfindingService.findPath(this.mesh.position, randomGoal);
+
+            if (path.length > 0) {
+                this.wanderPath = path;
+                this.currentWaypointIndex = 0;
+                this.state = NPCState.Wandering;
+            }
+        }
     }
 
     private updateStateAnimation(): void {
@@ -266,6 +346,13 @@ export class NPC {
                 break;
 
             case NPCState.Chasing:
+                const runAnim = this.findAnimation('run') || this.findAnimation('walk');
+                if (runAnim) {
+                    this.playAnimation(runAnim);
+                }
+                break;
+
+            case NPCState.Wandering:
                 const walkAnim = this.findAnimation('walk') || this.findAnimation('run');
                 if (walkAnim) {
                     this.playAnimation(walkAnim);
@@ -342,6 +429,7 @@ export class NPC {
     public getState(): string {
         switch (this.state) {
             case NPCState.Idle: return 'Idle';
+            case NPCState.Wandering: return 'Wandering';
             case NPCState.Chasing: return 'Chasing';
             case NPCState.Attacking: return 'Attacking';
             default: return 'Unknown';

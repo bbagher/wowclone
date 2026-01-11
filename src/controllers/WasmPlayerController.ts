@@ -382,33 +382,34 @@ export class WasmPlayerController {
         }
     }
 
-    private createDebugCollisionCylinder(): void {
-        if (!this.mesh) return;
+    // Debug collision visualization (disabled by default)
+    // private createDebugCollisionCylinder(): void {
+    //     if (!this.mesh) return;
 
-        // Create a wireframe cylinder to visualize collision radius
-        this.debugCollisionCylinder = MeshBuilder.CreateCylinder(
-            'playerCollisionDebug',
-            {
-                height: 2,
-                diameter: this.playerCollisionRadius * 2,
-                tessellation: 16
-            },
-            this.scene
-        );
+    //     // Create a wireframe cylinder to visualize collision radius
+    //     this.debugCollisionCylinder = MeshBuilder.CreateCylinder(
+    //         'playerCollisionDebug',
+    //         {
+    //             height: 2,
+    //             diameter: this.playerCollisionRadius * 2,
+    //             tessellation: 16
+    //         },
+    //         this.scene
+    //     );
 
-        // Make it wireframe and transparent
-        const debugMaterial = new StandardMaterial('debugCollisionMat', this.scene);
-        debugMaterial.wireframe = true;
-        debugMaterial.emissiveColor = new Color3(0, 1, 0); // Green
-        debugMaterial.alpha = 0.5;
-        this.debugCollisionCylinder.material = debugMaterial;
+    //     // Make it wireframe and transparent
+    //     const debugMaterial = new StandardMaterial('debugCollisionMat', this.scene);
+    //     debugMaterial.wireframe = true;
+    //     debugMaterial.emissiveColor = new Color3(0, 1, 0); // Green
+    //     debugMaterial.alpha = 0.5;
+    //     this.debugCollisionCylinder.material = debugMaterial;
 
-        // Parent to player mesh
-        this.debugCollisionCylinder.parent = this.mesh;
-        this.debugCollisionCylinder.position.y = 1; // Center at player height
+    //     // Parent to player mesh
+    //     this.debugCollisionCylinder.parent = this.mesh;
+    //     this.debugCollisionCylinder.position.y = 1; // Center at player height
 
-        console.log(`Player collision debug cylinder created (radius: ${this.playerCollisionRadius})`);
-    }
+    //     console.log(`Player collision debug cylinder created (radius: ${this.playerCollisionRadius})`);
+    // }
 
     public dispose(): void {
         if (this.animationController) {

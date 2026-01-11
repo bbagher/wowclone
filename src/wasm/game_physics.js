@@ -6,6 +6,19 @@ function _assertClass(instance, klass) {
     }
 }
 
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
+let cachedFloat32ArrayMemory0 = null;
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
+}
+
 function getStringFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return decodeText(ptr, len);
@@ -33,6 +46,10 @@ function decodeText(ptr, len) {
     return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
 
+const PathfinderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_pathfinder_free(ptr >>> 0, 1));
+
 const PlayerPhysicsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_playerphysics_free(ptr >>> 0, 1));
@@ -40,6 +57,86 @@ const PlayerPhysicsFinalization = (typeof FinalizationRegistry === 'undefined')
 const Vector3Finalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_vector3_free(ptr >>> 0, 1));
+
+export class Pathfinder {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PathfinderFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_pathfinder_free(ptr, 0);
+    }
+    /**
+     * Check if a cell is walkable
+     * @param {number} x
+     * @param {number} z
+     * @returns {boolean}
+     */
+    is_walkable(x, z) {
+        const ret = wasm.pathfinder_is_walkable(this.__wbg_ptr, x, z);
+        return ret !== 0;
+    }
+    /**
+     * Mark a cell as blocked (obstacle)
+     * @param {number} x
+     * @param {number} z
+     */
+    set_blocked(x, z) {
+        wasm.pathfinder_set_blocked(this.__wbg_ptr, x, z);
+    }
+    /**
+     * Mark a circular area as blocked
+     * @param {number} x
+     * @param {number} z
+     * @param {number} radius
+     */
+    set_blocked_circle(x, z, radius) {
+        wasm.pathfinder_set_blocked_circle(this.__wbg_ptr, x, z, radius);
+    }
+    /**
+     * Get a random walkable position within bounds
+     * @param {number} center_x
+     * @param {number} center_z
+     * @param {number} radius
+     * @returns {Float32Array}
+     */
+    get_random_walkable_position(center_x, center_z, radius) {
+        const ret = wasm.pathfinder_get_random_walkable_position(this.__wbg_ptr, center_x, center_z, radius);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
+     * @param {number} grid_size
+     * @param {number} cell_size
+     * @param {number} world_size
+     */
+    constructor(grid_size, cell_size, world_size) {
+        const ret = wasm.pathfinder_new(grid_size, cell_size, world_size);
+        this.__wbg_ptr = ret >>> 0;
+        PathfinderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Find path using A* algorithm
+     * Returns a flat array of [x1, z1, x2, z2, ...] coordinates in world space
+     * @param {number} start_x
+     * @param {number} start_z
+     * @param {number} goal_x
+     * @param {number} goal_z
+     * @returns {Float32Array}
+     */
+    find_path(start_x, start_z, goal_x, goal_z) {
+        const ret = wasm.pathfinder_find_path(this.__wbg_ptr, start_x, start_z, goal_x, goal_z);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+}
+if (Symbol.dispose) Pathfinder.prototype[Symbol.dispose] = Pathfinder.prototype.free;
 
 export class PlayerPhysics {
     __destroy_into_raw() {
@@ -284,6 +381,10 @@ function __wbg_get_imports() {
     imports.wbg.__wbg___wbindgen_throw_dd24417ed36fc46e = function(arg0, arg1) {
         throw new Error(getStringFromWasm0(arg0, arg1));
     };
+    imports.wbg.__wbg_random_cc1f9237d866d212 = function() {
+        const ret = Math.random();
+        return ret;
+    };
     imports.wbg.__wbindgen_init_externref_table = function() {
         const table = wasm.__wbindgen_externrefs;
         const offset = table.grow(4);
@@ -300,6 +401,7 @@ function __wbg_get_imports() {
 function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     __wbg_init.__wbindgen_wasm_module = module;
+    cachedFloat32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
 
 

@@ -83,8 +83,8 @@ export class WasmPlayerController {
         // Snap player to ground on initial load
         this.snapPlayerToGround();
 
-        // Create debug collision cylinder
-        this.createDebugCollisionCylinder();
+        // Create debug collision cylinder (disabled)
+        // this.createDebugCollisionCylinder();
 
         // Add shadows to all meshes
         result.meshes.forEach(mesh => {

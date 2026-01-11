@@ -161,9 +161,8 @@ class Game {
         await this.environmentManager.createGround();
         await this.environmentManager.loadNatureAssets();
 
-        // Enable debug visualization for collision bounds
-        this.collisionManager.enableDebugVisualization(true);
-        console.log('Collision debug visualization enabled');
+        // Disable debug visualization for collision bounds
+        this.collisionManager.enableDebugVisualization(false);
         console.log('Registered collidables:', this.collisionManager.getCollidableMeshes().length);
     }
 

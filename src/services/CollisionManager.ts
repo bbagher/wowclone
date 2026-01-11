@@ -1,6 +1,9 @@
 import { Scene } from '@babylonjs/core/scene';
-import { Vector3 } from '@babylonjs/core/Maths/math';
+import { Vector3, Color3 } from '@babylonjs/core/Maths/math';
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 
 /**
  * CollisionManager handles static object collision detection
@@ -11,9 +14,11 @@ export class CollisionManager {
     private collidableMeshes: Set<AbstractMesh> = new Set();
     private playerRadius: number = 0.5; // Collision capsule radius
     private debugMode: boolean = false;
+    private debugMeshes: Map<AbstractMesh, Mesh> = new Map();
+    private scene: Scene;
 
-    constructor(_scene: Scene) {
-        // Scene stored for future use if needed
+    constructor(scene: Scene) {
+        this.scene = scene;
     }
 
     /**
@@ -23,16 +28,32 @@ export class CollisionManager {
     public registerCollidable(mesh: AbstractMesh): void {
         if (!mesh) return;
 
+        // Skip meshes without geometry (empty parent nodes)
+        const boundingInfo = mesh.getBoundingInfo();
+        if (!boundingInfo) return;
+
+        // Check if this mesh has actual geometry (not just a container)
+        const boundingSize = boundingInfo.boundingBox.extendSize;
+        const volume = boundingSize.x * boundingSize.y * boundingSize.z;
+
+        // Skip if bounding box is too small (degenerate) or suspiciously large (likely a parent container)
+        if (volume < 0.001 || volume > 10000) {
+            return;
+        }
+
         // Compute bounding info for this mesh
         mesh.computeWorldMatrix(true);
-        mesh.getBoundingInfo();
-        mesh.refreshBoundingInfo();
 
         // Mark mesh as collidable
         mesh.checkCollisions = true;
 
         // Store in our collection
         this.collidableMeshes.add(mesh);
+
+        if (this.debugMode) {
+            console.log(`Registered ${mesh.name} - volume: ${volume.toFixed(2)}, bounds: ${boundingSize.x.toFixed(2)}x${boundingSize.y.toFixed(2)}x${boundingSize.z.toFixed(2)}`);
+            this.createDebugVisualization(mesh);
+        }
     }
 
     /**
@@ -41,6 +62,13 @@ export class CollisionManager {
     public unregisterCollidable(mesh: AbstractMesh): void {
         this.collidableMeshes.delete(mesh);
         mesh.checkCollisions = false;
+
+        // Remove debug visualization
+        const debugMesh = this.debugMeshes.get(mesh);
+        if (debugMesh) {
+            debugMesh.dispose();
+            this.debugMeshes.delete(mesh);
+        }
     }
 
     /**
@@ -200,18 +228,80 @@ export class CollisionManager {
     }
 
     /**
+     * Create a custom debug visualization box for a collidable mesh
+     */
+    private createDebugVisualization(mesh: AbstractMesh): void {
+        const boundingInfo = mesh.getBoundingInfo();
+        if (!boundingInfo) return;
+
+        const boundingBox = boundingInfo.boundingBox;
+        const size = boundingBox.extendSize;
+        const center = boundingBox.centerWorld;
+
+        // Create a wireframe box matching the bounding box
+        const debugBox = MeshBuilder.CreateBox(
+            `debug_${mesh.name}`,
+            {
+                width: size.x * 2,
+                height: size.y * 2,
+                depth: size.z * 2
+            },
+            this.scene
+        );
+
+        // Position at the bounding box center
+        debugBox.position = center.clone();
+
+        // Make it wireframe and semi-transparent
+        const debugMaterial = new StandardMaterial(`debugMat_${mesh.name}`, this.scene);
+        debugMaterial.wireframe = true;
+        debugMaterial.emissiveColor = new Color3(1, 0, 0); // Red
+        debugMaterial.alpha = 0.6;
+        debugBox.material = debugMaterial;
+
+        // Don't let debug boxes collide or cast shadows
+        debugBox.isPickable = false;
+        debugBox.checkCollisions = false;
+
+        // Store reference
+        this.debugMeshes.set(mesh, debugBox);
+    }
+
+    /**
      * Debug visualization of collision bounds
      */
     public enableDebugVisualization(enable: boolean): void {
         this.debugMode = enable;
-        for (const mesh of this.collidableMeshes) {
-            mesh.showBoundingBox = enable;
-        }
+
         console.log(`Collision debug mode: ${enable ? 'ON' : 'OFF'}`);
+
+        if (enable) {
+            // Create debug visualizations for all registered meshes
+            for (const mesh of this.collidableMeshes) {
+                this.createDebugVisualization(mesh);
+
+                const boundingInfo = mesh.getBoundingInfo();
+                const size = boundingInfo.boundingBox.extendSize;
+                console.log(`  - ${mesh.name}: ${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}`);
+            }
+        } else {
+            // Remove all debug visualizations
+            for (const debugMesh of this.debugMeshes.values()) {
+                debugMesh.dispose();
+            }
+            this.debugMeshes.clear();
+        }
+
         console.log(`Total collidable meshes: ${this.collidableMeshes.size}`);
     }
 
     public dispose(): void {
+        // Dispose all debug meshes
+        for (const debugMesh of this.debugMeshes.values()) {
+            debugMesh.dispose();
+        }
+        this.debugMeshes.clear();
+
         this.clearAll();
     }
 }

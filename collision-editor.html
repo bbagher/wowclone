@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collision Editor - 3D Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 400px;
+            min-width: 400px;
+            background: rgba(30, 30, 40, 0.95);
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #renderCanvas {
+            flex: 1;
+            outline: none;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #4fc3f7;
+            text-shadow: 0 0 10px rgba(79, 195, 247, 0.5);
+        }
+
+        .asset-section {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .asset-section:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(79, 195, 247, 0.4);
+        }
+
+        .asset-section h2 {
+            font-size: 15px;
+            margin-bottom: 12px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .asset-section h2::before {
+            content: '🌳';
+        }
+
+        .asset-section.rock h2::before {
+            content: '🪨';
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 11px;
+            color: #cfd8dc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4fc3f7;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4fc3f7;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+            border: none;
+        }
+
+        .value-display {
+            min-width: 50px;
+            text-align: right;
+            font-weight: bold;
+            color: #4fc3f7;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .export-button {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .reset-button {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #output.show {
+            display: block;
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .info-text {
+            font-size: 11px;
+            color: #90a4ae;
+            margin-top: 10px;
+            line-height: 1.6;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            border-left: 3px solid #4fc3f7;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(79, 195, 247, 0.5);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 195, 247, 0.7);
+        }
+
+        .current-asset {
+            text-align: center;
+            padding: 10px;
+            background: linear-gradient(135deg, rgba(79, 195, 247, 0.2), rgba(129, 199, 132, 0.2));
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            font-size: 13px;
+            border: 1px solid rgba(79, 195, 247, 0.3);
+            color: #fff;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>🎯 Collision Editor</h1>
+
+            <div class="current-asset" id="currentAsset">
+                Loading assets...
+            </div>
+
+            <div id="controls">
+                <!-- Controls will be dynamically generated -->
+            </div>
+
+            <div class="button-group">
+                <button class="export-button" onclick="exportSettings()">📋 Export JSON</button>
+                <button class="reset-button" onclick="resetAll()">🔄 Reset All</button>
+            </div>
+
+            <div id="output"></div>
+
+            <div class="info-text">
+                💡 <strong>Tips:</strong><br>
+                • Adjust sliders to see real-time collision changes<br>
+                • Red = Trees (trunk collision), Blue = Rocks (full collision)<br>
+                • Export JSON when done to use in your game<br>
+                • Click asset names to switch between objects
+            </div>
+        </div>
+
+        <canvas id="renderCanvas"></canvas>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "@babylonjs/core/": "https://cdn.jsdelivr.net/npm/@babylonjs/core@7.0.0/",
+            "@babylonjs/loaders/": "https://cdn.jsdelivr.net/npm/@babylonjs/loaders@7.0.0/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import { Engine } from '@babylonjs/core/Engines/engine';
+        import { Scene } from '@babylonjs/core/scene';
+        import { Vector3, Color3, Color4 } from '@babylonjs/core/Maths/math';
+        import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+        import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+        import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+        import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+        import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+        import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+        import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+        import '@babylonjs/loaders/glTF';
+        import '@babylonjs/core/Helpers/sceneHelpers';
+
+        // Asset definitions
+        const assets = [
+            { name: 'CommonTree_1.gltf', type: 'tree', displayName: 'Common Tree 1' },
+            { name: 'CommonTree_2.gltf', type: 'tree', displayName: 'Common Tree 2' },
+            { name: 'CommonTree_3.gltf', type: 'tree', displayName: 'Common Tree 3' },
+            { name: 'DeadTree_1.gltf', type: 'tree', displayName: 'Dead Tree' },
+            { name: 'Rock_Medium_1.gltf', type: 'rock', displayName: 'Medium Rock 1' },
+            { name: 'Rock_Medium_2.gltf', type: 'rock', displayName: 'Medium Rock 2' },
+            { name: 'Rock_Small_1.gltf', type: 'rock', displayName: 'Small Rock' },
+        ];
+
+        // Default collision settings
+        const defaultSettings = {
+            radiusMultiplier: 1.0,
+            heightMultiplier: 0.3,
+            heightOffset: 0.0,
+            enabled: true
+        };
+
+        // Store settings for each asset
+        const collisionSettings = {};
+        assets.forEach(asset => {
+            collisionSettings[asset.name] = { ...defaultSettings };
+        });
+
+        let currentAssetIndex = 0;
+        let currentMesh = null;
+        let debugCylinder = null;
+        let scene, camera, engine, ground;
+
+        // Initialize Babylon.js
+        const canvas = document.getElementById('renderCanvas');
+        engine = new Engine(canvas, true);
+        scene = new Scene(engine);
+        scene.clearColor = new Color4(0.5, 0.7, 0.9, 1.0);
+
+        // Camera
+        camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 10, Vector3.Zero(), scene);
+        camera.attachControl(canvas, true);
+        camera.lowerRadiusLimit = 3;
+        camera.upperRadiusLimit = 30;
+
+        // Lights
+        const hemiLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
+        hemiLight.intensity = 0.6;
+
+        const sunLight = new DirectionalLight('sunLight', new Vector3(-1, -2, -1), scene);
+        sunLight.position = new Vector3(20, 40, 20);
+        sunLight.intensity = 0.8;
+
+        const shadowGenerator = new ShadowGenerator(1024, sunLight);
+        shadowGenerator.useBlurExponentialShadowMap = true;
+
+        // Ground
+        ground = MeshBuilder.CreateGround('ground', { width: 20, height: 20 }, scene);
+        const groundMat = new StandardMaterial('groundMat', scene);
+        groundMat.diffuseColor = new Color3(0.3, 0.6, 0.3);
+        ground.material = groundMat;
+        ground.receiveShadows = true;
+
+        // Generate UI controls
+        function generateControls() {
+            const controlsDiv = document.getElementById('controls');
+            const uniqueTypes = [...new Set(assets.map(a => a.type))];
+
+            controlsDiv.innerHTML = '';
+
+            assets.forEach((asset, index) => {
+                const section = document.createElement('div');
+                section.className = `asset-section ${asset.type}`;
+                section.innerHTML = `
+                    <h2 style="cursor: pointer;" onclick="loadAsset(${index})">${asset.displayName}</h2>
+                    <div class="control-group">
+                        <label>Radius Multiplier</label>
+                        <div class="slider-container">
+                            <input type="range"
+                                   id="${asset.name}-radius"
+                                   min="0.1"
+                                   max="3.0"
+                                   step="0.1"
+                                   value="${collisionSettings[asset.name].radiusMultiplier}"
+                                   oninput="updateSetting('${asset.name}', 'radiusMultiplier', this.value)">
+                            <span class="value-display" id="${asset.name}-radius-value">${collisionSettings[asset.name].radiusMultiplier.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Height Multiplier</label>
+                        <div class="slider-container">
+                            <input type="range"
+                                   id="${asset.name}-height"
+                                   min="0.1"
+                                   max="2.0"
+                                   step="0.05"
+                                   value="${collisionSettings[asset.name].heightMultiplier}"
+                                   oninput="updateSetting('${asset.name}', 'heightMultiplier', this.value)">
+                            <span class="value-display" id="${asset.name}-height-value">${collisionSettings[asset.name].heightMultiplier.toFixed(2)}</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Height Offset (Y)</label>
+                        <div class="slider-container">
+                            <input type="range"
+                                   id="${asset.name}-offset"
+                                   min="-2.0"
+                                   max="2.0"
+                                   step="0.1"
+                                   value="${collisionSettings[asset.name].heightOffset}"
+                                   oninput="updateSetting('${asset.name}', 'heightOffset', this.value)">
+                            <span class="value-display" id="${asset.name}-offset-value">${collisionSettings[asset.name].heightOffset.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <div class="checkbox-container">
+                            <input type="checkbox"
+                                   id="${asset.name}-enabled"
+                                   ${collisionSettings[asset.name].enabled ? 'checked' : ''}
+                                   onchange="updateSetting('${asset.name}', 'enabled', this.checked)">
+                            <label for="${asset.name}-enabled" style="margin: 0;">Collision Enabled</label>
+                        </div>
+                    </div>
+                `;
+                controlsDiv.appendChild(section);
+            });
+        }
+
+        // Update setting
+        window.updateSetting = function(assetName, property, value) {
+            if (property === 'enabled') {
+                collisionSettings[assetName][property] = value;
+            } else {
+                collisionSettings[assetName][property] = parseFloat(value);
+                document.getElementById(`${assetName}-${property}-value`).textContent =
+                    property === 'heightMultiplier' ? parseFloat(value).toFixed(2) : parseFloat(value).toFixed(1);
+            }
+
+            // Update visualization if this is the current asset
+            const currentAsset = assets[currentAssetIndex];
+            if (currentAsset.name === assetName && currentMesh) {
+                updateDebugVisualization();
+            }
+        };
+
+        // Load asset
+        window.loadAsset = async function(index) {
+            currentAssetIndex = index;
+            const asset = assets[index];
+
+            document.getElementById('currentAsset').textContent = `📦 ${asset.displayName}`;
+
+            // Remove old mesh
+            if (currentMesh) {
+                currentMesh.dispose();
+            }
+            if (debugCylinder) {
+                debugCylinder.dispose();
+            }
+
+            try {
+                const result = await SceneLoader.ImportMeshAsync(
+                    '',
+                    '/assets/nature/glTF/',
+                    asset.name,
+                    scene
+                );
+
+                if (result.meshes.length > 0) {
+                    currentMesh = result.meshes[0];
+                    currentMesh.position = Vector3.Zero();
+
+                    // Find the largest child mesh
+                    let bestChild = null;
+                    let bestVolume = 0;
+                    const children = currentMesh.getChildMeshes(false);
+
+                    children.forEach(child => {
+                        const bounds = child.getBoundingInfo();
+                        if (bounds) {
+                            const size = bounds.boundingBox.extendSize;
+                            const volume = size.x * size.y * size.z;
+                            if (volume > bestVolume) {
+                                bestChild = child;
+                                bestVolume = volume;
+                            }
+                        }
+                    });
+
+                    // Use the best child for collision visualization
+                    if (bestChild) {
+                        currentMesh = bestChild;
+                    }
+
+                    // Add shadows
+                    shadowGenerator.addShadowCaster(currentMesh);
+
+                    // Position on ground
+                    const bounds = currentMesh.getHierarchyBoundingVectors();
+                    currentMesh.position.y = -bounds.min.y;
+
+                    // Update camera
+                    const size = bounds.max.subtract(bounds.min);
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    camera.radius = maxDim * 2.5;
+                    camera.target = currentMesh.position.clone();
+
+                    // Create debug visualization
+                    updateDebugVisualization();
+                }
+            } catch (error) {
+                console.error('Failed to load asset:', error);
+                document.getElementById('currentAsset').textContent = `❌ Failed to load ${asset.displayName}`;
+            }
+        };
+
+        // Update debug visualization
+        function updateDebugVisualization() {
+            if (debugCylinder) {
+                debugCylinder.dispose();
+            }
+
+            if (!currentMesh) return;
+
+            const asset = assets[currentAssetIndex];
+            const settings = collisionSettings[asset.name];
+
+            if (!settings.enabled) return;
+
+            const bounds = currentMesh.getBoundingInfo();
+            const size = bounds.boundingBox.extendSize;
+            const min = bounds.boundingBox.minimumWorld;
+
+            // Calculate dimensions
+            const baseRadius = Math.min(size.x, size.z);
+            const diameter = baseRadius * 2 * settings.radiusMultiplier;
+            const fullHeight = size.y * 2;
+            const cylinderHeight = fullHeight * settings.heightMultiplier;
+
+            // Create cylinder
+            debugCylinder = MeshBuilder.CreateCylinder(
+                'debugCylinder',
+                {
+                    height: cylinderHeight,
+                    diameter: diameter,
+                    tessellation: 16
+                },
+                scene
+            );
+
+            // Position
+            debugCylinder.position.x = bounds.boundingBox.centerWorld.x;
+            debugCylinder.position.z = bounds.boundingBox.centerWorld.z;
+            debugCylinder.position.y = min.y + cylinderHeight / 2 + settings.heightOffset;
+
+            // Material
+            const mat = new StandardMaterial('debugMat', scene);
+            mat.wireframe = true;
+            mat.emissiveColor = asset.type === 'tree' ? new Color3(1, 0, 0) : new Color3(0, 0.5, 1);
+            mat.alpha = 0.6;
+            debugCylinder.material = mat;
+
+            debugCylinder.isPickable = false;
+        }
+
+        // Export settings
+        window.exportSettings = function() {
+            const output = document.getElementById('output');
+            const json = JSON.stringify(collisionSettings, null, 2);
+            output.innerHTML = `<pre>${json}</pre>`;
+            output.classList.add('show');
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(json).then(() => {
+                console.log('Settings copied to clipboard!');
+            });
+        };
+
+        // Reset all
+        window.resetAll = function() {
+            assets.forEach(asset => {
+                collisionSettings[asset.name] = { ...defaultSettings };
+            });
+            generateControls();
+            if (currentMesh) {
+                updateDebugVisualization();
+            }
+            const output = document.getElementById('output');
+            output.classList.remove('show');
+        };
+
+        // Initialize
+        generateControls();
+        loadAsset(0);
+
+        // Render loop
+        engine.runRenderLoop(() => {
+            scene.render();
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>

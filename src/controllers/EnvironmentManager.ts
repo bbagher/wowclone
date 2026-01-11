@@ -106,9 +106,6 @@ export class EnvironmentManager {
         const templateMesh = result.meshes[0];
         templateMesh.setEnabled(false); // Hide the template
 
-        // Debug: Log mesh hierarchy to understand structure
-        console.log(`${asset.name} mesh hierarchy:`, result.meshes.map(m => `${m.name} (children: ${m.getChildMeshes().length})`));
-
         // Create instances at random positions
         for (let i = 0; i < asset.count; i++) {
             // Random position within the terrain bounds

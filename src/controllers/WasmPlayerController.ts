@@ -1,3 +1,6 @@
+// Import required for side effects FIRST (before ShadowGenerator)
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
+
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3, Color3 } from '@babylonjs/core/Maths/math';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';

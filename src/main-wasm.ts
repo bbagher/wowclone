@@ -1,3 +1,7 @@
+// Import required for side effects FIRST (before ShadowGenerator)
+import '@babylonjs/core/Helpers/sceneHelpers';
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
+
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3, Color3, Color4 } from '@babylonjs/core/Maths/math';
@@ -7,10 +11,6 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 
 // Import loaders
 import '@babylonjs/loaders/glTF';
-
-// Import required for side effects
-import '@babylonjs/core/Helpers/sceneHelpers';
-import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 
 // WASM physics engine
 import init, { PlayerPhysics } from './wasm/game_physics.js';
@@ -24,6 +24,7 @@ import { NPCManager } from './controllers/NPCManager';
 import { CombatSystem } from './controllers/CombatSystem';
 import { TargetingSystem } from './controllers/TargetingSystem';
 import { CombatTextManager, DamageType } from './controllers/CombatTextManager';
+import { ParticleManager } from './controllers/ParticleManager';
 import { GameConfig } from './config';
 import { CollisionManager } from './services/CollisionManager';
 
@@ -39,6 +40,7 @@ class Game {
     private combatSystem: CombatSystem;
     private targetingSystem: TargetingSystem;
     private combatTextManager: CombatTextManager;
+    private particleManager: ParticleManager;
     private shadowGenerator: ShadowGenerator | null = null;
     private physics!: PlayerPhysics;
     private collisionManager: CollisionManager;
@@ -68,6 +70,7 @@ class Game {
         this.combatSystem = new CombatSystem();
         this.targetingSystem = new TargetingSystem();
         this.combatTextManager = new CombatTextManager(this.scene);
+        this.particleManager = new ParticleManager(this.scene);
 
         // These will be initialized after async setup
         this.playerController = null as any; // Temporary
@@ -328,6 +331,17 @@ class Game {
         // Show damage number
         this.combatTextManager.showDamage(damageAmount, target.mesh.position, DamageType.Outgoing);
 
+        // Show blood splatter effect when hitting NPC
+        const targetBloodPosition = target.mesh.position.clone().add(new Vector3(0, 1, 0));
+        const hitDirection = target.mesh.position.subtract(playerMesh.position).normalize();
+        if (isDead) {
+            // More dramatic blood effect for killing blow
+            this.particleManager.createCriticalBloodSplatter(targetBloodPosition);
+        } else {
+            // Regular blood spray in the direction of the hit
+            this.particleManager.createBloodSpray(targetBloodPosition, hitDirection, 1.0);
+        }
+
         // Visual feedback
         this.flashAbilitySlot(1);
         this.updateTargetUI();
@@ -444,6 +458,10 @@ class Game {
             // Show damage number on player
             if (playerMesh) {
                 this.combatTextManager.showDamage(attack.damage, playerMesh.position, DamageType.Incoming);
+
+                // Show blood splatter effect when player gets hit
+                const bloodPosition = playerMesh.position.clone().add(new Vector3(0, 1, 0));
+                this.particleManager.createBloodSplatter(bloodPosition, 1.0);
             }
         });
     }
@@ -460,6 +478,7 @@ class Game {
         this.environmentManager.dispose();
         this.npcManager.dispose();
         this.combatTextManager.dispose();
+        this.particleManager.dispose();
         this.collisionManager.dispose();
         this.scene.dispose();
         this.engine.dispose();
